@@ -12,10 +12,6 @@ import numpy.typing as npt
 
 
 class PIDController:
-    """PID Controller with distance-adaptive response and deadzone for lock stability"""
-
-    DEADZONE_PX = 2.0
-
     def __init__(self, Kp: float, Ki: float, Kd: float) -> None:
         self.Kp = Kp
         self.Ki = Ki
@@ -33,57 +29,88 @@ class PIDController:
     def update(self, error: float) -> float:
         dist = self._error_distance
 
-        if dist < self.DEADZONE_PX:
+        if dist < 2.0:
             self.integral *= 0.5
-            self.previous_error = error * 0.3
+            self.previous_error = error
             return 0.0
 
         self.integral += error
         self.integral = max(-500.0, min(500.0, self.integral))
 
         derivative = error - self.previous_error
-
-        adjusted_kp = self._calculate_adaptive_kp(self.Kp)
-
-        if dist > 50.0:
-            ki_scale = 1.0
-        elif dist > 15.0:
-            ki_scale = (dist - 15.0) / 35.0
-        else:
-            ki_scale = 0.0
-            self.integral *= 0.7
-
-        if dist < 8.0:
-            kd_boost = 2.5
-        elif dist < 20.0:
-            kd_boost = 1.5
-        else:
-            kd_boost = 1.0
-
-        output = (
-            (adjusted_kp * error)
-            + (self.Ki * ki_scale * self.integral)
-            + (self.Kd * kd_boost * derivative)
-        )
+        output = self.Kp * error + self.Ki * self.integral + self.Kd * derivative
 
         self.previous_error = error
 
         return output
 
-    def _calculate_adaptive_kp(self, kp: float) -> float:
-        dist = self._error_distance
 
-        if dist > 80.0:
-            return kp * (1.0 + min(kp, 0.5) * 2.0)
-        elif dist > 15.0:
-            t = (dist - 15.0) / 65.0
-            base = kp
-            boost = min(kp, 0.5) * 2.0 * t
-            return base + boost
-        elif dist > 5.0:
-            return kp * 0.85
-        else:
-            return kp * 0.6
+def _letterbox(
+    image: npt.NDArray[np.uint8], target_size: int
+) -> Tuple[npt.NDArray[np.uint8], float, Tuple[int, int, int, int]]:
+    h, w = image.shape[:2]
+    scale = min(target_size / w, target_size / h)
+    new_w = int(w * scale)
+    new_h = int(h * scale)
+
+    resized = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+
+    pad_top = (target_size - new_h) // 2
+    pad_left = (target_size - new_w) // 2
+    pad_bottom = target_size - new_h - pad_top
+    pad_right = target_size - new_w - pad_left
+
+    padded = cv2.copyMakeBorder(
+        resized,
+        pad_top,
+        pad_bottom,
+        pad_left,
+        pad_right,
+        cv2.BORDER_CONSTANT,
+        value=(114, 114, 114),
+    )
+
+    return padded, scale, (pad_top, pad_left, pad_bottom, pad_right)
+
+
+def _apply_clahe(
+    image: npt.NDArray[np.uint8], clip_limit: float = 2.0, tile_grid: int = 8
+) -> npt.NDArray[np.uint8]:
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    l_ch, a_ch, b_ch = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(tile_grid, tile_grid))
+    l_ch = clahe.apply(l_ch)
+    merged = cv2.merge([l_ch, a_ch, b_ch])
+    return np.array(cv2.cvtColor(merged, cv2.COLOR_LAB2BGR), dtype=np.uint8)
+
+
+def _gamma_correct(
+    image: npt.NDArray[np.uint8], gamma: float = 1.0
+) -> npt.NDArray[np.uint8]:
+    if abs(gamma - 1.0) < 0.01:
+        return image
+    inv_gamma = 1.0 / gamma
+    lut = np.array(
+        [((i / 255.0) ** inv_gamma) * 255 for i in range(256)], dtype=np.uint8
+    )
+    return cv2.LUT(image, lut)
+
+
+def _apply_sharpen(image: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
+    """Light unsharp mask to restore edge detail after resize for small/distant targets."""
+    blurred = cv2.GaussianBlur(image, (0, 0), 1.0)
+    sharpened = cv2.addWeighted(image, 1.5, blurred, -0.5, 0)
+    return np.clip(sharpened, 0, 255).astype(np.uint8)
+
+
+def _estimate_target_size(image: npt.NDArray[np.uint8], model_input_size: int) -> float:
+    """Heuristic: estimate average "object size" in image via edge density.
+    Returns a rough ratio of object size to image size (0.0-1.0).
+    Low ratio = distant targets, needs enhancement."""
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
+    edges = cv2.Canny(gray, 50, 150)
+    edge_ratio = np.count_nonzero(edges) / max(edges.size, 1)
+    return edge_ratio
 
 
 def preprocess_image(
@@ -92,10 +119,29 @@ def preprocess_image(
     if image.ndim == 3 and image.shape[2] == 4:
         image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
 
+    h, w = image.shape[:2]
+    is_small_frame = h < model_input_size or w < model_input_size
+    edge_ratio = _estimate_target_size(image, model_input_size)
+    needs_enhancement = is_small_frame or edge_ratio < 0.08
+
+    if needs_enhancement:
+        image = _apply_clahe(image, clip_limit=2.5, tile_grid=4)
+        image = _gamma_correct(image, gamma=0.9)
+
     if image.shape[0] != model_input_size or image.shape[1] != model_input_size:
-        image = cv2.resize(
-            image, (model_input_size, model_input_size), interpolation=cv2.INTER_NEAREST
-        )
+        if needs_enhancement:
+            image = cv2.resize(
+                image,
+                (model_input_size, model_input_size),
+                interpolation=cv2.INTER_LINEAR,
+            )
+            image = _apply_sharpen(image)
+        else:
+            image = cv2.resize(
+                image,
+                (model_input_size, model_input_size),
+                interpolation=cv2.INTER_NEAREST,
+            )
 
     blob = cv2.dnn.blobFromImage(
         image,
@@ -108,6 +154,37 @@ def preprocess_image(
     return np.ascontiguousarray(blob, dtype=np.float32)
 
 
+def preprocess_image_letterbox(
+    image: npt.NDArray[np.uint8], model_input_size: int
+) -> Tuple[npt.NDArray[np.float32], float, Tuple[int, int, int, int]]:
+    if image.ndim == 3 and image.shape[2] == 4:
+        image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+
+    h, w = image.shape[:2]
+    is_small_frame = h < model_input_size or w < model_input_size
+    edge_ratio = _estimate_target_size(image, model_input_size)
+    needs_enhancement = is_small_frame or edge_ratio < 0.08
+
+    if needs_enhancement:
+        image = _apply_clahe(image, clip_limit=2.5, tile_grid=4)
+        image = _gamma_correct(image, gamma=0.9)
+
+    lb_image, scale, padding = _letterbox(image, model_input_size)
+
+    if needs_enhancement:
+        lb_image = _apply_sharpen(lb_image)
+
+    blob = cv2.dnn.blobFromImage(
+        lb_image,
+        scalefactor=1.0 / 255.0,
+        size=(model_input_size, model_input_size),
+        swapRB=True,
+        crop=False,
+    )
+
+    return np.ascontiguousarray(blob, dtype=np.float32), scale, padding
+
+
 def postprocess_outputs(
     outputs: List[Any],
     original_width: int,
@@ -116,7 +193,9 @@ def postprocess_outputs(
     min_confidence: float,
     offset_x: int = 0,
     offset_y: int = 0,
-    min_box_area_ratio: float = 0.0001,
+    min_box_area_ratio: float = 0.00003,
+    letterbox_scale: float = 0.0,
+    letterbox_padding: Tuple[int, int, int, int] | None = None,
 ) -> Tuple[List[List[float]], List[float]]:
     predictions = outputs[0][0].T
 
@@ -126,9 +205,6 @@ def postprocess_outputs(
     if len(filtered_predictions) == 0:
         return [], []
 
-    scale_x = original_width / model_input_size
-    scale_y = original_height / model_input_size
-
     cx, cy, w, h = (
         filtered_predictions[:, 0],
         filtered_predictions[:, 1],
@@ -136,10 +212,35 @@ def postprocess_outputs(
         filtered_predictions[:, 3],
     )
 
-    x1 = (cx - w / 2) * scale_x + offset_x
-    y1 = (cy - h / 2) * scale_y + offset_y
-    x2 = (cx + w / 2) * scale_x + offset_x
-    y2 = (cy + h / 2) * scale_y + offset_y
+    if letterbox_scale > 0.0 and letterbox_padding is not None:
+        pad_top, pad_left, pad_bottom, pad_right = letterbox_padding
+        cx = (cx - pad_left) / letterbox_scale
+        cy = (cy - pad_top) / letterbox_scale
+        w = w / letterbox_scale
+        h = h / letterbox_scale
+
+        x1 = cx - w / 2
+        y1 = cy - h / 2
+        x2 = cx + w / 2
+        y2 = cy + h / 2
+
+        x1 = np.clip(x1, 0, original_width)
+        y1 = np.clip(y1, 0, original_height)
+        x2 = np.clip(x2, 0, original_width)
+        y2 = np.clip(y2, 0, original_height)
+
+        x1 += offset_x
+        y1 += offset_y
+        x2 += offset_x
+        y2 += offset_y
+    else:
+        scale_x = original_width / model_input_size
+        scale_y = original_height / model_input_size
+
+        x1 = (cx - w / 2) * scale_x + offset_x
+        y1 = (cy - h / 2) * scale_y + offset_y
+        x2 = (cx + w / 2) * scale_x + offset_x
+        y2 = (cy + h / 2) * scale_y + offset_y
 
     box_ws = x2 - x1
     box_hs = y2 - y1
@@ -147,14 +248,16 @@ def postprocess_outputs(
     image_area = original_width * original_height
     min_box_area = image_area * min_box_area_ratio
 
-    min_box_dim = 8.0
+    min_box_dim = 3.0
+
+    aspect_ratio = box_ws / np.maximum(box_hs, 1.0)
 
     valid_mask = (
         (box_areas >= min_box_area)
         & (box_ws >= min_box_dim)
         & (box_hs >= min_box_dim)
-        & (box_ws / np.maximum(box_hs, 1.0) > 0.08)
-        & (box_hs / np.maximum(box_ws, 1.0) > 0.08)
+        & (aspect_ratio > 0.02)
+        & (aspect_ratio < 40.0)
     )
 
     valid_indices = np.where(valid_mask)[0]

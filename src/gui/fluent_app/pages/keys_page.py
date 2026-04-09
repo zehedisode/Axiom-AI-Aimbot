@@ -5,8 +5,11 @@ from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtWidgets import QWidget, QHBoxLayout
 from PyQt6.QtGui import QKeySequence
 from qfluentwidgets import (
-    SettingCardGroup, SettingCard, FluentIcon, 
-    PushButton, BodyLabel
+    SettingCardGroup,
+    SettingCard,
+    FluentIcon,
+    PushButton,
+    BodyLabel,
 )
 
 from ..base_page import BasePage
@@ -14,8 +17,11 @@ from ..language_manager import t
 
 # 手柄按鍵讀取
 from win_utils.gamepad_input import (
-    is_gamepad_vk, poll_pressed_gamepad_button, GP_VK_TRANSLATION_MAP,
-    GP_VK_MIN, GP_VK_MAX,
+    is_gamepad_vk,
+    poll_pressed_gamepad_button,
+    GP_VK_TRANSLATION_MAP,
+    GP_VK_MIN,
+    GP_VK_MAX,
 )
 
 
@@ -70,6 +76,7 @@ def vk_to_name(vk_code: int) -> str:
 
 class KeyBindButton(PushButton):
     """按鍵綁定按鈕（支援右鍵清除）"""
+
     keyBound = pyqtSignal(int)  # 發送虛擬鍵碼
 
     def __init__(self, parent=None):
@@ -80,7 +87,7 @@ class KeyBindButton(PushButton):
         self.clicked.connect(self._startListening)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._showContextMenu)
-        
+
         # 手柄輪詢計時器
         self._gamepadTimer = QTimer(self)
         self._gamepadTimer.setInterval(50)  # 50ms 輪詢
@@ -103,9 +110,10 @@ class KeyBindButton(PushButton):
         self._listening = True
         self.setText(t("key_press_to_bind"))
         self.setFocus()
-        
+
         # 記錄目前按下的所有鍵，避免一進監聽就偵測到（例如某些滑鼠微動延遲釋放）
         import win32api
+
         self._initial_keys = set()
         for i in range(1, 255):
             if (win32api.GetAsyncKeyState(i) & 0x8000) != 0:
@@ -123,6 +131,7 @@ class KeyBindButton(PushButton):
         """顯示右鍵選單"""
         from PyQt6.QtWidgets import QMenu
         from PyQt6.QtGui import QAction
+
         menu = QMenu(self)
         clearAction = QAction(t("key_clear"), self)
         clearAction.triggered.connect(self._clearBinding)
@@ -144,15 +153,14 @@ class KeyBindButton(PushButton):
         if not self._listening:
             self._updateText()
 
-    
     def _pollGamepad(self):
         """輪詢全局按鍵與手柄（由 QTimer 觸發）"""
         if not self._listening:
             self._gamepadTimer.stop()
             return
-            
+
         import win32api
-        
+
         # 1. 輪詢系統全局按鍵 (包含滑鼠與鍵盤)
         for i in range(1, 255):
             is_down = (win32api.GetAsyncKeyState(i) & 0x8000) != 0
@@ -175,7 +183,7 @@ class KeyBindButton(PushButton):
             self.setText(vk_to_name(gp_vk))
             self.keyBound.emit(gp_vk)
             self._stopListening()
-    
+
     def _qtKeyToVk(self, qtKey: int) -> int:
         """將 Qt Key 轉換為 Windows VK code"""
         # 字母
@@ -211,94 +219,93 @@ class KeyBindButton(PushButton):
 
 class KeysPage(BasePage):
     """按鍵綁定頁面"""
-    
+
     def __init__(self, parent=None):
         super().__init__("tab_keys", parent)
         self._config = None
         self._initWidgets()
         self._initLayout()
         self._connectSignals()
-    
+
     def setConfig(self, config):
         """設定 Config 實例並載入值"""
         self._config = config
         self._loadFromConfig()
-    
+
     def _initWidgets(self):
         """初始化所有控制項"""
-        
+
         # === 瞄準按鍵 ===
         self.aimKeysGroup = SettingCardGroup(t("auto_aim"), self.scrollWidget)
-        
+
         # 瞄準鍵 1
         self.aimKey1Btn = KeyBindButton()
         self.aimKey1Card = SettingCard(
-            FluentIcon.FINGERPRINT,
-            t("aim_key_1"),
-            "",
-            self.aimKeysGroup
+            FluentIcon.FINGERPRINT, t("aim_key_1"), "", self.aimKeysGroup
         )
-        self.aimKey1Card.hBoxLayout.addWidget(self.aimKey1Btn, 0, Qt.AlignmentFlag.AlignRight)
+        self.aimKey1Card.hBoxLayout.addWidget(
+            self.aimKey1Btn, 0, Qt.AlignmentFlag.AlignRight
+        )
         self.aimKey1Card.hBoxLayout.addSpacing(16)
-        
+
         # 瞄準鍵 2
         self.aimKey2Btn = KeyBindButton()
         self.aimKey2Card = SettingCard(
-            FluentIcon.FINGERPRINT,
-            t("aim_key_2"),
-            "",
-            self.aimKeysGroup
+            FluentIcon.FINGERPRINT, t("aim_key_2"), "", self.aimKeysGroup
         )
-        self.aimKey2Card.hBoxLayout.addWidget(self.aimKey2Btn, 0, Qt.AlignmentFlag.AlignRight)
+        self.aimKey2Card.hBoxLayout.addWidget(
+            self.aimKey2Btn, 0, Qt.AlignmentFlag.AlignRight
+        )
         self.aimKey2Card.hBoxLayout.addSpacing(16)
-        
+
         # 瞄準鍵 3
         self.aimKey3Btn = KeyBindButton()
         self.aimKey3Card = SettingCard(
-            FluentIcon.FINGERPRINT,
-            t("aim_key_3"),
-            "",
-            self.aimKeysGroup
+            FluentIcon.FINGERPRINT, t("aim_key_3"), "", self.aimKeysGroup
         )
-        self.aimKey3Card.hBoxLayout.addWidget(self.aimKey3Btn, 0, Qt.AlignmentFlag.AlignRight)
+        self.aimKey3Card.hBoxLayout.addWidget(
+            self.aimKey3Btn, 0, Qt.AlignmentFlag.AlignRight
+        )
         self.aimKey3Card.hBoxLayout.addSpacing(16)
-        
+
         # 切換鍵
         self.toggleKeyBtn = KeyBindButton()
         self.toggleKeyCard = SettingCard(
             FluentIcon.POWER_BUTTON,
             t("toggle_key"),
             t("toggle_auto_aim"),
-            self.aimKeysGroup
+            self.aimKeysGroup,
         )
-        self.toggleKeyCard.hBoxLayout.addWidget(self.toggleKeyBtn, 0, Qt.AlignmentFlag.AlignRight)
+        self.toggleKeyCard.hBoxLayout.addWidget(
+            self.toggleKeyBtn, 0, Qt.AlignmentFlag.AlignRight
+        )
         self.toggleKeyCard.hBoxLayout.addSpacing(16)
 
         # === 自動射擊按鍵 ===
-        self.fireKeysGroup = SettingCardGroup(t("keys_and_auto_fire"), self.scrollWidget)
-        
+        self.fireKeysGroup = SettingCardGroup(
+            t("keys_and_auto_fire"), self.scrollWidget
+        )
+
         # 自動射擊鍵 1
         self.fireKey1Btn = KeyBindButton()
         self.fireKey1Card = SettingCard(
-            FluentIcon.RINGER,
-            t("auto_fire_key_1"),
-            "",
-            self.fireKeysGroup
+            FluentIcon.RINGER, t("auto_fire_key_1"), "", self.fireKeysGroup
         )
-        self.fireKey1Card.hBoxLayout.addWidget(self.fireKey1Btn, 0, Qt.AlignmentFlag.AlignRight)
+        self.fireKey1Card.hBoxLayout.addWidget(
+            self.fireKey1Btn, 0, Qt.AlignmentFlag.AlignRight
+        )
         self.fireKey1Card.hBoxLayout.addSpacing(16)
-        
+
         # 自動射擊鍵 2
         self.fireKey2Btn = KeyBindButton()
         self.fireKey2Card = SettingCard(
-            FluentIcon.RINGER,
-            t("auto_fire_key_2"),
-            "",
-            self.fireKeysGroup
+            FluentIcon.RINGER, t("auto_fire_key_2"), "", self.fireKeysGroup
         )
-        self.fireKey2Card.hBoxLayout.addWidget(self.fireKey2Btn, 0, Qt.AlignmentFlag.AlignRight)
+        self.fireKey2Card.hBoxLayout.addWidget(
+            self.fireKey2Btn, 0, Qt.AlignmentFlag.AlignRight
+        )
         self.fireKey2Card.hBoxLayout.addSpacing(16)
-    
+
     def _initLayout(self):
         """排版所有控制項"""
         # 瞄準按鍵
@@ -307,14 +314,14 @@ class KeysPage(BasePage):
         self.aimKeysGroup.addSettingCard(self.aimKey3Card)
         self.aimKeysGroup.addSettingCard(self.toggleKeyCard)
         self.addContent(self.aimKeysGroup)
-        
+
         # 自動射擊按鍵
         self.fireKeysGroup.addSettingCard(self.fireKey1Card)
         self.fireKeysGroup.addSettingCard(self.fireKey2Card)
         self.addContent(self.fireKeysGroup)
-        
+
         self.scrollLayout.addStretch(1)
-    
+
     def _connectSignals(self):
         """連接信號"""
         self.aimKey1Btn.keyBound.connect(lambda vk: self._onAimKeyChanged(0, vk))
@@ -323,34 +330,36 @@ class KeysPage(BasePage):
         self.toggleKeyBtn.keyBound.connect(self._onToggleKeyChanged)
         self.fireKey1Btn.keyBound.connect(self._onFireKey1Changed)
         self.fireKey2Btn.keyBound.connect(self._onFireKey2Changed)
-    
+
     def _loadFromConfig(self):
         """從 Config 載入值"""
         if not self._config:
             return
-        
-        # 瞄準鍵
-        if len(self._config.AimKeys) >= 1:
-            self.aimKey1Btn.setVkCode(self._config.AimKeys[0])
-        if len(self._config.AimKeys) >= 2:
-            self.aimKey2Btn.setVkCode(self._config.AimKeys[1])
-        if len(self._config.AimKeys) >= 3:
-            self.aimKey3Btn.setVkCode(self._config.AimKeys[2])
-        
-        # 切換鍵
-        self.toggleKeyBtn.setVkCode(self._config.aim_toggle_key)
-        
-        # 自動射擊鍵
-        self.fireKey1Btn.setVkCode(self._config.auto_fire_key)
-        self.fireKey2Btn.setVkCode(self._config.auto_fire_key2)
-    
+
+        try:
+            aim_keys = self._config.AimKeys
+            if not isinstance(aim_keys, list):
+                aim_keys = [0x01, 0x06, 0x02]
+            if len(aim_keys) >= 1:
+                self.aimKey1Btn.setVkCode(int(aim_keys[0]))
+            if len(aim_keys) >= 2:
+                self.aimKey2Btn.setVkCode(int(aim_keys[1]))
+            if len(aim_keys) >= 3:
+                self.aimKey3Btn.setVkCode(int(aim_keys[2]))
+
+            self.toggleKeyBtn.setVkCode(int(self._config.aim_toggle_key))
+            self.fireKey1Btn.setVkCode(int(self._config.auto_fire_key))
+            self.fireKey2Btn.setVkCode(int(self._config.auto_fire_key2))
+        except Exception as e:
+            print(f"[KeysPage] _loadFromConfig error: {e}")
+
     # === 回調函數 ===
     def _onAimKeyChanged(self, index: int, vk: int):
         if self._config:
             while len(self._config.AimKeys) <= index:
                 self._config.AimKeys.append(0)
             self._config.AimKeys[index] = vk
-    
+
     def _onToggleKeyChanged(self, vk: int):
         if self._config:
             self._config.aim_toggle_key = vk
@@ -358,11 +367,11 @@ class KeysPage(BasePage):
     def _onFireKey1Changed(self, vk: int):
         if self._config:
             self._config.auto_fire_key = vk
-    
+
     def _onFireKey2Changed(self, vk: int):
         if self._config:
             self._config.auto_fire_key2 = vk
-    
+
     def retranslateUi(self):
         """刷新翻譯"""
         super().retranslateUi()

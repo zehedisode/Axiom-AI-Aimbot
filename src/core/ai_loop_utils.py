@@ -68,20 +68,33 @@ def filter_boxes_by_fov(
         return [], []
 
     fov_half = fov_size // 2
-    fov_left = crosshair_x - fov_half
-    fov_top = crosshair_y - fov_half
-    fov_right = crosshair_x + fov_half
-    fov_bottom = crosshair_y + fov_half
+    fov_margin = max(15, fov_half // 6)
+    fov_left = crosshair_x - fov_half - fov_margin
+    fov_top = crosshair_y - fov_half - fov_margin
+    fov_right = crosshair_x + fov_half + fov_margin
+    fov_bottom = crosshair_y + fov_half + fov_margin
 
     filtered_boxes = []
     filtered_confidences = []
 
     for i, box in enumerate(boxes):
         x1, y1, x2, y2 = box
-        if x1 < fov_right and x2 > fov_left and y1 < fov_bottom and y2 > fov_top:
-            filtered_boxes.append(box)
-            if i < len(confidences):
-                filtered_confidences.append(confidences[i])
+        box_w = x2 - x1
+        box_h = y2 - y1
+        is_small = box_w < 30 and box_h < 60
+
+        if is_small:
+            cx = (x1 + x2) * 0.5
+            cy = (y1 + y2) * 0.5
+            if fov_left <= cx <= fov_right and fov_top <= cy <= fov_bottom:
+                filtered_boxes.append(box)
+                if i < len(confidences):
+                    filtered_confidences.append(confidences[i])
+        else:
+            if x1 < fov_right and x2 > fov_left and y1 < fov_bottom and y2 > fov_top:
+                filtered_boxes.append(box)
+                if i < len(confidences):
+                    filtered_confidences.append(confidences[i])
 
     return filtered_boxes, filtered_confidences
 
@@ -118,8 +131,8 @@ def apply_temporal_filter(
     confidences: List[float],
     state: LoopState,
     current_time: float,
-    confirm_frames: int = 2,
-    expire_time: float = 0.3,
+    confirm_frames: int = 1,
+    expire_time: float = 0.5,
 ) -> Tuple[List[List[float]], List[float]]:
     if not boxes:
         elapsed = current_time - state.target_last_seen_time
@@ -141,7 +154,7 @@ def apply_temporal_filter(
                 best_iou = iou
                 best_match_idx = i
 
-        if best_iou > 0.15:
+        if best_iou > 0.05:
             best_box = boxes[best_match_idx]
             best_conf = confidences[best_match_idx]
         else:
@@ -152,12 +165,13 @@ def apply_temporal_filter(
 
     if state.target_last_box is not None:
         iou_with_last = _box_iou(list(state.target_last_box), best_box)
-        if iou_with_last > 0.15:
+        if iou_with_last > 0.05:
             state.target_confirm_count = min(
-                state.target_confirm_count + 1, confirm_frames + 5
+                state.target_confirm_count + 1,
+                confirm_frames + 10,
             )
         else:
-            state.target_confirm_count = 1
+            state.target_confirm_count = max(1, state.target_confirm_count - 1)
     else:
         state.target_confirm_count = 1
 
@@ -166,8 +180,10 @@ def apply_temporal_filter(
 
     if state.smoothed_box is not None:
         iou_check = _box_iou(state.smoothed_box, best_box)
-        if iou_check > 0.1:
-            best_box = _smooth_box(state.smoothed_box, best_box, alpha=0.35)
+        if iou_check > 0.05:
+            box_area = (best_box[2] - best_box[0]) * (best_box[3] - best_box[1])
+            alpha = 0.5 if box_area < 800 else 0.4
+            best_box = _smooth_box(state.smoothed_box, best_box, alpha=alpha)
 
     state.smoothed_box = list(best_box)
 

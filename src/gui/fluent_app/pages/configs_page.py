@@ -332,14 +332,18 @@ class ConfigsPage(BasePage):
                     self._showInfo(t("config_error"), t("config_load_failed"), False)
                     return
                 self._showInfo(t("config_success"), t("config_loaded"))
+            except Exception as e:
+                print(f"[ConfigPage] Load error: {e}")
+                self._showInfo(t("config_error"), t("config_load_failed"), False)
+                return
+            try:
                 window = self.window()
                 if hasattr(window, "_refreshAllPages"):
                     window._refreshAllPages()
                 elif hasattr(window, "setConfig") and window._config:
                     window.setConfig(window._config)
             except Exception as e:
-                print(f"[ConfigPage] Load error: {e}")
-                self._showInfo(t("config_error"), t("config_load_failed"), False)
+                print(f"[ConfigPage] Refresh error after load: {e}")
 
     def _onSaveConfig(self):
         name = self._getSelectedConfig()

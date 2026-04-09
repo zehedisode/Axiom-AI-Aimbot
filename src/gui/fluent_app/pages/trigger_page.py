@@ -3,8 +3,11 @@
 
 from PyQt6.QtCore import Qt
 from qfluentwidgets import (
-    SettingCardGroup, SettingCard, SwitchSettingCard,
-    FluentIcon, ComboBox
+    SettingCardGroup,
+    SettingCard,
+    SwitchSettingCard,
+    FluentIcon,
+    ComboBox,
 )
 from ..components.slider_spin_card import SliderDoubleSpinCard, SliderLabelCard
 
@@ -38,57 +41,56 @@ class TriggerPage(BasePage):
         self.fireTargetCombo.addItems([t("head"), t("body"), t("both")])
         self.fireTargetCombo.setMinimumWidth(120)
         self.fireTargetCard = SettingCard(
-            FluentIcon.PEOPLE,
-            t("auto_fire_target"),
-            "",
-            self.fireGroup
+            FluentIcon.PEOPLE, t("auto_fire_target"), "", self.fireGroup
         )
-        self.fireTargetCard.hBoxLayout.addWidget(self.fireTargetCombo, 0, Qt.AlignmentFlag.AlignRight)
+        self.fireTargetCard.hBoxLayout.addWidget(
+            self.fireTargetCombo, 0, Qt.AlignmentFlag.AlignRight
+        )
         self.fireTargetCard.hBoxLayout.addSpacing(16)
 
         # 持續自動射擊（不需按住按鍵）
         self.alwaysAutoFireCard = SwitchSettingCard(
-            FluentIcon.RINGER,
-            t("always_auto_fire"),
-            "",
-            parent=self.fireGroup
+            FluentIcon.RINGER, t("always_auto_fire"), "", parent=self.fireGroup
         )
 
         # 滑鼠點擊方式（自動射擊使用的模擬信號）
         self.mouseClickCombo = ComboBox()
-        self.mouseClickCombo.addItems(["mouse_event", "sendinput", "ddxoft", "arduino", "makcu", "xbox"])
+        self.mouseClickCombo.addItems(
+            ["mouse_event", "sendinput", "ddxoft", "arduino", "makcu", "xbox"]
+        )
         self.mouseClickCombo.setMinimumWidth(150)
         self.mouseClickCard = SettingCard(
-            FluentIcon.FINGERPRINT,
-            t("mouse_click_method"),
-            "",
-            self.fireGroup
+            FluentIcon.FINGERPRINT, t("mouse_click_method"), "", self.fireGroup
         )
-        self.mouseClickCard.hBoxLayout.addWidget(self.mouseClickCombo, 0, Qt.AlignmentFlag.AlignRight)
+        self.mouseClickCard.hBoxLayout.addWidget(
+            self.mouseClickCombo, 0, Qt.AlignmentFlag.AlignRight
+        )
         self.mouseClickCard.hBoxLayout.addSpacing(16)
 
         # 開鏡延遲 - 使用 SliderDoubleSpinCard
         self.scopeDelayCard = SliderDoubleSpinCard(
             FluentIcon.HISTORY,
             t("scope_delay"),
-            0.0, 2.0,
+            0.0,
+            2.0,
             decimals=2,
             step=0.01,
             suffix="s",
             description="",
-            parent=self.fireGroup
+            parent=self.fireGroup,
         )
 
         # 射擊間隔 - 使用 SliderDoubleSpinCard
         self.fireIntervalCard = SliderDoubleSpinCard(
             FluentIcon.SPEED_HIGH,
             t("fire_interval"),
-            0.01, 1.0,
+            0.01,
+            1.0,
             decimals=2,
             step=0.01,
             suffix="s",
             description="",
-            parent=self.fireGroup
+            parent=self.fireGroup,
         )
 
         # === 目標區域設定 ===
@@ -98,31 +100,34 @@ class TriggerPage(BasePage):
         self.headWidthCard = SliderLabelCard(
             FluentIcon.CONSTRACT,
             t("head_width_ratio"),
-            10, 100,
+            10,
+            100,
             format_func=lambda v: f"{v}%",
             slider_width=200,
-            parent=self.areaGroup
+            parent=self.areaGroup,
         )
 
         # 頭部高度比例 - 使用 SliderLabelCard
         self.headHeightCard = SliderLabelCard(
             FluentIcon.FIT_PAGE,
             t("head_height_ratio"),
-            10, 100,
+            10,
+            100,
             format_func=lambda v: f"{v}%",
             description=t("body_height_note"),
             slider_width=200,
-            parent=self.areaGroup
+            parent=self.areaGroup,
         )
 
         # 身體寬度比例 - 使用 SliderLabelCard
         self.bodyWidthCard = SliderLabelCard(
             FluentIcon.CONSTRACT,
             t("body_width_ratio"),
-            10, 100,
+            10,
+            100,
             format_func=lambda v: f"{v}%",
             slider_width=200,
-            parent=self.areaGroup
+            parent=self.areaGroup,
         )
 
     def _initLayout(self):
@@ -161,28 +166,54 @@ class TriggerPage(BasePage):
         if not self._config:
             return
 
-        # 自動射擊設定
-        targets = ["head", "body", "both"]
-        if self._config.auto_fire_target_part in targets:
-            self.fireTargetCombo.setCurrentIndex(targets.index(self._config.auto_fire_target_part))
-        self.alwaysAutoFireCard.setChecked(getattr(self._config, 'always_auto_fire', False))
+        self._block_all_signals(True)
+        try:
+            targets = ["head", "body", "both"]
+            if self._config.auto_fire_target_part in targets:
+                self.fireTargetCombo.setCurrentIndex(
+                    targets.index(self._config.auto_fire_target_part)
+                )
+            self.alwaysAutoFireCard.setChecked(
+                getattr(self._config, "always_auto_fire", False)
+            )
 
-        # 滑鼠點擊方式
-        click_methods = ["mouse_event", "sendinput", "ddxoft", "arduino", "makcu", "xbox"]
-        current_click = getattr(self._config, 'mouse_click_method', 'mouse_event')
-        if current_click in click_methods:
-            self.mouseClickCombo.setCurrentIndex(click_methods.index(current_click))
+            click_methods = [
+                "mouse_event",
+                "sendinput",
+                "ddxoft",
+                "arduino",
+                "makcu",
+                "xbox",
+            ]
+            current_click = getattr(self._config, "mouse_click_method", "mouse_event")
+            if current_click in click_methods:
+                self.mouseClickCombo.setCurrentIndex(click_methods.index(current_click))
 
-        # 開鏡延遲 - 使用新組件的 setValue
-        self.scopeDelayCard.setValue(self._config.auto_fire_delay)
+            self.scopeDelayCard.setValue(self._config.auto_fire_delay)
 
-        # 射擊間隔 - 使用新組件的 setValue
-        self.fireIntervalCard.setValue(self._config.auto_fire_interval)
+            self.fireIntervalCard.setValue(self._config.auto_fire_interval)
 
-        # 目標區域設定 - 使用新組件的 setValue
-        self.headWidthCard.setValue(int(self._config.head_width_ratio * 100))
-        self.headHeightCard.setValue(int(self._config.head_height_ratio * 100))
-        self.bodyWidthCard.setValue(int(self._config.body_width_ratio * 100))
+            self.headWidthCard.setValue(int(self._config.head_width_ratio * 100))
+            self.headHeightCard.setValue(int(self._config.head_height_ratio * 100))
+            self.bodyWidthCard.setValue(int(self._config.body_width_ratio * 100))
+        except Exception as e:
+            print(f"[TriggerPage] _loadFromConfig error: {e}")
+        finally:
+            self._block_all_signals(False)
+
+    def _block_all_signals(self, block: bool):
+        widgets = [
+            self.fireTargetCombo,
+            self.alwaysAutoFireCard,
+            self.mouseClickCombo,
+            self.scopeDelayCard,
+            self.fireIntervalCard,
+            self.headWidthCard,
+            self.headHeightCard,
+            self.bodyWidthCard,
+        ]
+        for w in widgets:
+            w.blockSignals(block)
 
     # === 回調函數 ===
     def _onFireTargetChanged(self, index):
@@ -208,6 +239,7 @@ class TriggerPage(BasePage):
             if text == "ddxoft":
                 try:
                     from win_utils import ensure_ddxoft_ready
+
                     ensure_ddxoft_ready()
                 except ImportError:
                     pass

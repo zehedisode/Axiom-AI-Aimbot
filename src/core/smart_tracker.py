@@ -1,18 +1,8 @@
 import numpy as np
-from typing import Tuple, Optional
+from typing import Tuple
 
 
 class SmartTracker:
-    """
-    Smart Tracker with lock-on stabilization
-
-    Features:
-    1. Velocity smoothing with direction-change detection
-    2. Zero-Lag Reset for sudden stops/direction changes
-    3. Lock-on deadzone to prevent micro-jitter when locked
-    4. Adaptive prediction time based on distance
-    """
-
     def __init__(
         self,
         smoothing_factor: float = 0.5,
@@ -23,8 +13,8 @@ class SmartTracker:
         self.stop_threshold = stop_threshold
         self.position_deadzone = position_deadzone
 
-        self.last_x = None
-        self.last_y = None
+        self.last_x: float | None = None
+        self.last_y: float | None = None
         self.vx = 0.0
         self.vy = 0.0
         self.initialized = False
@@ -44,7 +34,6 @@ class SmartTracker:
         raw_vy = (measured_y - self.last_y) / dt
 
         dot_product = raw_vx * self.vx + raw_vy * self.vy
-
         if dot_product < 0:
             self.vx = raw_vx
             self.vy = raw_vy
@@ -64,6 +53,9 @@ class SmartTracker:
 
     def get_predicted_position(self, prediction_time: float) -> Tuple[float, float]:
         if not self.initialized:
+            return 0.0, 0.0
+
+        if self.last_x is None or self.last_y is None:
             return 0.0, 0.0
 
         speed = np.sqrt(self.vx**2 + self.vy**2)

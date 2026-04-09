@@ -4,8 +4,11 @@
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QGridLayout, QSizePolicy, QWidget
 from qfluentwidgets import (
-    SettingCardGroup, SwitchSettingCard, SettingCard,
-    FluentIcon, CheckBox
+    SettingCardGroup,
+    SwitchSettingCard,
+    SettingCard,
+    FluentIcon,
+    CheckBox,
 )
 from ..components.slider_spin_card import SliderLabelCard
 
@@ -39,54 +42,44 @@ class VisualsPage(BasePage):
         self.displayGroup = SettingCardGroup(t("tab_display"), self.scrollWidget)
 
         # === Status Panel Settings ===
-        self.statusPanelGroup = SettingCardGroup(t("status_panel_settings", "Status Panel"), self.scrollWidget)
+        self.statusPanelGroup = SettingCardGroup(
+            t("status_panel_settings", "Status Panel"), self.scrollWidget
+        )
 
         # Show FOV
         self.showFovCard = SwitchSettingCard(
-            FluentIcon.ZOOM,
-            t("show_fov"),
-            "",
-            parent=self.displayGroup
+            FluentIcon.ZOOM, t("show_fov"), "", parent=self.displayGroup
         )
 
         # Show Boxes
         self.showBoxesCard = SwitchSettingCard(
-            FluentIcon.CHECKBOX,
-            t("show_boxes"),
-            "",
-            parent=self.displayGroup
+            FluentIcon.CHECKBOX, t("show_boxes"), "", parent=self.displayGroup
         )
 
         # Show Confidence
         self.showConfidenceCard = SwitchSettingCard(
-            FluentIcon.CERTIFICATE,
-            t("show_confidence"),
-            "",
-            parent=self.displayGroup
+            FluentIcon.CERTIFICATE, t("show_confidence"), "", parent=self.displayGroup
         )
 
         # Show Status Panel
         self.showStatusCard = SwitchSettingCard(
-            FluentIcon.INFO,
-            t("show_status_panel"),
-            "",
-            parent=self.statusPanelGroup
+            FluentIcon.INFO, t("show_status_panel"), "", parent=self.statusPanelGroup
         )
 
         # Show Detection Range
         self.showDetectRangeCard = SwitchSettingCard(
-            FluentIcon.FULL_SCREEN,
-            t("show_detect_range"),
-            "",
-            parent=self.displayGroup
+            FluentIcon.FULL_SCREEN, t("show_detect_range"), "", parent=self.displayGroup
         )
 
         # Status Panel Elements (Checkbox style)
         self.statusPanelElementsCard = SettingCard(
             FluentIcon.INFO,
             t("status_panel_elements", "Status Panel Elements"),
-            t("status_panel_elements_hint", "Choose which rows are shown in status panel"),
-            self.statusPanelGroup
+            t(
+                "status_panel_elements_hint",
+                "Choose which rows are shown in status panel",
+            ),
+            self.statusPanelGroup,
         )
         self.statusPanelElementsWidget = QWidget(self.statusPanelElementsCard)
         self.statusPanelElementsLayout = QGridLayout(self.statusPanelElementsWidget)
@@ -94,13 +87,30 @@ class VisualsPage(BasePage):
         self.statusPanelElementsLayout.setHorizontalSpacing(10)
         self.statusPanelElementsLayout.setVerticalSpacing(4)
 
-        self.spAutoAimCheck = CheckBox(self._shortText("auto_aim"), self.statusPanelElementsWidget)
-        self.spModelCheck = CheckBox(self._shortText("status_panel_current_model"), self.statusPanelElementsWidget)
-        self.spMouseMoveCheck = CheckBox(self._shortText("mouse_move_method"), self.statusPanelElementsWidget)
-        self.spMouseClickCheck = CheckBox(self._shortText("mouse_click_method"), self.statusPanelElementsWidget)
-        self.spScreenshotMethodCheck = CheckBox(self._shortText("screenshot_method"), self.statusPanelElementsWidget)
-        self.spScreenshotFpsCheck = CheckBox(t("status_panel_screenshot_fps", "Screenshot FPS"), self.statusPanelElementsWidget)
-        self.spDetectionFpsCheck = CheckBox(t("status_panel_detection_fps", "Detection FPS"), self.statusPanelElementsWidget)
+        self.spAutoAimCheck = CheckBox(
+            self._shortText("auto_aim"), self.statusPanelElementsWidget
+        )
+        self.spModelCheck = CheckBox(
+            self._shortText("status_panel_current_model"),
+            self.statusPanelElementsWidget,
+        )
+        self.spMouseMoveCheck = CheckBox(
+            self._shortText("mouse_move_method"), self.statusPanelElementsWidget
+        )
+        self.spMouseClickCheck = CheckBox(
+            self._shortText("mouse_click_method"), self.statusPanelElementsWidget
+        )
+        self.spScreenshotMethodCheck = CheckBox(
+            self._shortText("screenshot_method"), self.statusPanelElementsWidget
+        )
+        self.spScreenshotFpsCheck = CheckBox(
+            t("status_panel_screenshot_fps", "Screenshot FPS"),
+            self.statusPanelElementsWidget,
+        )
+        self.spDetectionFpsCheck = CheckBox(
+            t("status_panel_detection_fps", "Detection FPS"),
+            self.statusPanelElementsWidget,
+        )
 
         self._statusPanelChecks = [
             self.spAutoAimCheck,
@@ -116,33 +126,39 @@ class VisualsPage(BasePage):
             col = index // 2
             self.statusPanelElementsLayout.addWidget(check, row, col)
 
-        self.statusPanelElementsWidget.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
+        self.statusPanelElementsWidget.setSizePolicy(
+            QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred
+        )
 
-        self.statusPanelElementsCard.hBoxLayout.addWidget(self.statusPanelElementsWidget, 0, Qt.AlignmentFlag.AlignRight)
+        self.statusPanelElementsCard.hBoxLayout.addWidget(
+            self.statusPanelElementsWidget, 0, Qt.AlignmentFlag.AlignRight
+        )
         self.statusPanelElementsCard.hBoxLayout.addSpacing(16)
 
         # === Appearance Settings ===
-        self.appearanceGroup = SettingCardGroup(t("appearance_options"), self.scrollWidget)
+        self.appearanceGroup = SettingCardGroup(
+            t("appearance_options"), self.scrollWidget
+        )
 
         # Enable Acrylic
         self.enableAcrylicCard = SwitchSettingCard(
             FluentIcon.LAYOUT,
             t("enable_acrylic"),
             t("enable_acrylic_hint"),
-            parent=self.appearanceGroup
+            parent=self.appearanceGroup,
         )
 
         # Acrylic Window Alpha
         self.windowAlphaCard = SliderLabelCard(
             FluentIcon.BRUSH,
             t("acrylic_window_alpha"),
-            60, 255,
+            60,
+            255,
             format_func=lambda v: str(v),
             description="",
             slider_width=200,
-            parent=self.appearanceGroup
+            parent=self.appearanceGroup,
         )
-
 
     def _initLayout(self):
         """Lays out all controls"""
@@ -177,42 +193,89 @@ class VisualsPage(BasePage):
         self.spAutoAimCheck.stateChanged.connect(self._onStatusPanelAutoAimChanged)
         self.spModelCheck.stateChanged.connect(self._onStatusPanelModelChanged)
         self.spMouseMoveCheck.stateChanged.connect(self._onStatusPanelMouseMoveChanged)
-        self.spMouseClickCheck.stateChanged.connect(self._onStatusPanelMouseClickChanged)
-        self.spScreenshotMethodCheck.stateChanged.connect(self._onStatusPanelScreenshotMethodChanged)
-        self.spScreenshotFpsCheck.stateChanged.connect(self._onStatusPanelScreenshotFpsChanged)
-        self.spDetectionFpsCheck.stateChanged.connect(self._onStatusPanelDetectionFpsChanged)
+        self.spMouseClickCheck.stateChanged.connect(
+            self._onStatusPanelMouseClickChanged
+        )
+        self.spScreenshotMethodCheck.stateChanged.connect(
+            self._onStatusPanelScreenshotMethodChanged
+        )
+        self.spScreenshotFpsCheck.stateChanged.connect(
+            self._onStatusPanelScreenshotFpsChanged
+        )
+        self.spDetectionFpsCheck.stateChanged.connect(
+            self._onStatusPanelDetectionFpsChanged
+        )
 
         # Appearance settings
         self.enableAcrylicCard.checkedChanged.connect(self._onAcrylicEnabledChanged)
         self.windowAlphaCard.valueChanged.connect(self._onWindowAlphaChanged)
         self.windowAlphaCard.slider.sliderReleased.connect(self._onWindowAlphaCommit)
 
-
     def _loadFromConfig(self):
         """Loads values from Config"""
         if not self._config:
             return
 
-        # Display settings
-        self.showFovCard.setChecked(self._config.show_fov)
-        self.showBoxesCard.setChecked(self._config.show_boxes)
-        self.showConfidenceCard.setChecked(self._config.show_confidence)
-        self.showStatusCard.setChecked(self._config.show_status_panel)
-        self.showDetectRangeCard.setChecked(self._config.show_detect_range)
-        self.spAutoAimCheck.setChecked(getattr(self._config, 'status_panel_show_auto_aim', True))
-        self.spModelCheck.setChecked(getattr(self._config, 'status_panel_show_model', True))
-        self.spMouseMoveCheck.setChecked(getattr(self._config, 'status_panel_show_mouse_move', True))
-        self.spMouseClickCheck.setChecked(getattr(self._config, 'status_panel_show_mouse_click', True))
-        self.spScreenshotMethodCheck.setChecked(getattr(self._config, 'status_panel_show_screenshot_method', True))
-        self.spScreenshotFpsCheck.setChecked(getattr(self._config, 'status_panel_show_screenshot_fps', True))
-        self.spDetectionFpsCheck.setChecked(getattr(self._config, 'status_panel_show_detection_fps', True))
+        self._block_all_signals(True)
+        try:
+            self.showFovCard.setChecked(self._config.show_fov)
+            self.showBoxesCard.setChecked(self._config.show_boxes)
+            self.showConfidenceCard.setChecked(self._config.show_confidence)
+            self.showStatusCard.setChecked(self._config.show_status_panel)
+            self.showDetectRangeCard.setChecked(self._config.show_detect_range)
+            self.spAutoAimCheck.setChecked(
+                getattr(self._config, "status_panel_show_auto_aim", True)
+            )
+            self.spModelCheck.setChecked(
+                getattr(self._config, "status_panel_show_model", True)
+            )
+            self.spMouseMoveCheck.setChecked(
+                getattr(self._config, "status_panel_show_mouse_move", True)
+            )
+            self.spMouseClickCheck.setChecked(
+                getattr(self._config, "status_panel_show_mouse_click", True)
+            )
+            self.spScreenshotMethodCheck.setChecked(
+                getattr(self._config, "status_panel_show_screenshot_method", True)
+            )
+            self.spScreenshotFpsCheck.setChecked(
+                getattr(self._config, "status_panel_show_screenshot_fps", True)
+            )
+            self.spDetectionFpsCheck.setChecked(
+                getattr(self._config, "status_panel_show_detection_fps", True)
+            )
 
-        # Appearance settings
-        self.enableAcrylicCard.setChecked(self._config.enable_acrylic)
-        safe_alpha = max(60, min(255, int(getattr(self._config, 'acrylic_window_alpha', 187))))
-        if self._config.acrylic_window_alpha != safe_alpha:
-            self._config.acrylic_window_alpha = safe_alpha
-        self.windowAlphaCard.setValue(safe_alpha)
+            self.enableAcrylicCard.setChecked(self._config.enable_acrylic)
+            safe_alpha = max(
+                60, min(255, int(getattr(self._config, "acrylic_window_alpha", 187)))
+            )
+            if self._config.acrylic_window_alpha != safe_alpha:
+                self._config.acrylic_window_alpha = safe_alpha
+            self.windowAlphaCard.setValue(safe_alpha)
+        except Exception as e:
+            print(f"[VisualsPage] _loadFromConfig error: {e}")
+        finally:
+            self._block_all_signals(False)
+
+    def _block_all_signals(self, block: bool):
+        widgets = [
+            self.showFovCard,
+            self.showBoxesCard,
+            self.showConfidenceCard,
+            self.showStatusCard,
+            self.showDetectRangeCard,
+            self.spAutoAimCheck,
+            self.spModelCheck,
+            self.spMouseMoveCheck,
+            self.spMouseClickCheck,
+            self.spScreenshotMethodCheck,
+            self.spScreenshotFpsCheck,
+            self.spDetectionFpsCheck,
+            self.enableAcrylicCard,
+            self.windowAlphaCard,
+        ]
+        for w in widgets:
+            w.blockSignals(block)
 
     # === Callback Functions ===
     def _onShowFovChanged(self, checked):
@@ -282,22 +345,20 @@ class VisualsPage(BasePage):
             self._acrylicRefreshTimer.stop()
         self._acrylicRefreshTimer.start()
 
-
-
     def _refreshWindowEffect(self, apply_styles=False):
         """Notify window to refresh Acrylic effect and styles"""
         if self._acrylicRefreshTimer.isActive():
             self._acrylicRefreshTimer.stop()
         window = self.window()
         if window:
-            if hasattr(window, '_applyAcrylicEffect'):
+            if hasattr(window, "_applyAcrylicEffect"):
                 window._applyAcrylicEffect()
-            if apply_styles and hasattr(window, '_applyThemeStyles'):
+            if apply_styles and hasattr(window, "_applyThemeStyles"):
                 window._applyThemeStyles()
 
     @staticmethod
     def _shortText(key: str, default: str = "") -> str:
-        return t(key, default).rstrip(':：').strip()
+        return t(key, default).rstrip(":：").strip()
 
     def retranslateUi(self):
         """Refreshes translations"""
@@ -305,7 +366,9 @@ class VisualsPage(BasePage):
 
         # Group titles
         self.displayGroup.titleLabel.setText(t("tab_display"))
-        self.statusPanelGroup.titleLabel.setText(t("status_panel_settings", "Status Panel"))
+        self.statusPanelGroup.titleLabel.setText(
+            t("status_panel_settings", "Status Panel")
+        )
 
         # Display settings
         self.showFovCard.titleLabel.setText(t("show_fov"))
@@ -313,15 +376,26 @@ class VisualsPage(BasePage):
         self.showConfidenceCard.titleLabel.setText(t("show_confidence"))
         self.showStatusCard.titleLabel.setText(t("show_status_panel"))
         self.showDetectRangeCard.titleLabel.setText(t("show_detect_range"))
-        self.statusPanelElementsCard.titleLabel.setText(t("status_panel_elements", "Status Panel Elements"))
-        self.statusPanelElementsCard.contentLabel.setText(t("status_panel_elements_hint", "Choose which rows are shown in status panel"))
+        self.statusPanelElementsCard.titleLabel.setText(
+            t("status_panel_elements", "Status Panel Elements")
+        )
+        self.statusPanelElementsCard.contentLabel.setText(
+            t(
+                "status_panel_elements_hint",
+                "Choose which rows are shown in status panel",
+            )
+        )
         self.spAutoAimCheck.setText(self._shortText("auto_aim"))
         self.spModelCheck.setText(self._shortText("status_panel_current_model"))
         self.spMouseMoveCheck.setText(self._shortText("mouse_move_method"))
         self.spMouseClickCheck.setText(self._shortText("mouse_click_method"))
         self.spScreenshotMethodCheck.setText(self._shortText("screenshot_method"))
-        self.spScreenshotFpsCheck.setText(t("status_panel_screenshot_fps", "Screenshot FPS"))
-        self.spDetectionFpsCheck.setText(t("status_panel_detection_fps", "Detection FPS"))
+        self.spScreenshotFpsCheck.setText(
+            t("status_panel_screenshot_fps", "Screenshot FPS")
+        )
+        self.spDetectionFpsCheck.setText(
+            t("status_panel_detection_fps", "Detection FPS")
+        )
 
         # 外觀設定
         self.appearanceGroup.titleLabel.setText(t("appearance_options"))

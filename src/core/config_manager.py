@@ -212,9 +212,58 @@ class ConfigManager:
             applied = 0
             for key, value in config_data.items():
                 if hasattr(config_instance, key):
-                    setattr(config_instance, key, value)
-                    applied += 1
+                    try:
+                        setattr(config_instance, key, value)
+                        applied += 1
+                    except (TypeError, ValueError, AttributeError) as e:
+                        print(
+                            f"[ConfigManager] Skipped invalid key '{key}={value}': {e}"
+                        )
             print(f"[ConfigManager] Loaded '{config_name}': {applied} settings applied")
+
+            config_instance.detect_interval = max(
+                0.001, min(0.1, config_instance.detect_interval)
+            )
+            config_instance.screenshot_interval = max(
+                0.001, min(0.1, getattr(config_instance, "screenshot_interval", 0.01))
+            )
+            config_instance.idle_detect_interval = max(
+                0.005, min(0.5, getattr(config_instance, "idle_detect_interval", 0.05))
+            )
+            config_instance.min_confidence = max(
+                0.01, min(1.0, config_instance.min_confidence)
+            )
+
+            detect_range = int(
+                getattr(config_instance, "detect_range_size", config_instance.height)
+            )
+            config_instance.detect_range_size = max(
+                config_instance.fov_size, min(config_instance.height, detect_range)
+            )
+
+            valid_methods = (
+                "mouse_event",
+                "sendinput",
+                "ddxoft",
+                "arduino",
+                "makcu",
+                "xbox",
+            )
+            if config_instance.mouse_move_method not in valid_methods:
+                config_instance.mouse_move_method = "mouse_event"
+            if (
+                getattr(config_instance, "mouse_click_method", "mouse_event")
+                not in valid_methods
+            ):
+                config_instance.mouse_click_method = "mouse_event"
+
+            valid_screenshot = ("mss", "dxcam")
+            if (
+                getattr(config_instance, "screenshot_method", "mss")
+                not in valid_screenshot
+            ):
+                config_instance.screenshot_method = "mss"
+
             return True
         except (OSError, json.JSONDecodeError) as e:
             print(f"[ConfigManager] Load failed: {e}")

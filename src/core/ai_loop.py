@@ -8,7 +8,10 @@ import queue
 import threading
 import time
 import traceback
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Tuple
+
+import cv2
+import numpy as np
 
 from win_utils import is_key_pressed
 
@@ -28,6 +31,7 @@ from .inference import (
     non_max_suppression,
     postprocess_outputs,
     preprocess_image,
+    preprocess_image_letterbox,
 )
 from .screen_capture import (
     _cleanup_capture,
@@ -40,6 +44,196 @@ if TYPE_CHECKING:
     import onnxruntime as ort
 
     from .config import Config
+
+
+def _run_tta(
+    frame: np.ndarray,
+    model: ort.InferenceSession,
+    input_name: str,
+    region: dict,
+    model_input_size: int,
+    min_confidence: float,
+    lb_scale: float,
+    lb_padding: tuple | None,
+) -> Tuple[List[List[float]], List[float]]:
+    original_blob = preprocess_image(frame, model_input_size)
+
+    outputs = model.run(None, {input_name: original_blob})
+    boxes, confidences = postprocess_outputs(
+        outputs,
+        region["width"],
+        region["height"],
+        model_input_size,
+        min_confidence,
+        region["left"],
+        region["top"],
+        letterbox_scale=lb_scale,
+        letterbox_padding=lb_padding,
+    )
+
+    flipped = frame[:, ::-1].copy()
+    flipped_blob = preprocess_image(flipped, model_input_size)
+    outputs_flip = model.run(None, {input_name: flipped_blob})
+    boxes_flip, conf_flip = postprocess_outputs(
+        outputs_flip,
+        region["width"],
+        region["height"],
+        model_input_size,
+        min_confidence,
+        region["left"],
+        region["top"],
+        letterbox_scale=lb_scale,
+        letterbox_padding=lb_padding,
+    )
+
+    if boxes_flip:
+        frame_w = region["width"]
+        for i, box in enumerate(boxes_flip):
+            x1, y1, x2, y2 = box
+            boxes.append(
+                [
+                    frame_w - x2 + 2 * region["left"],
+                    y1,
+                    frame_w - x1 + 2 * region["left"],
+                    y2,
+                ]
+            )
+            confidences.append(conf_flip[i])
+
+    if boxes:
+        boxes, confidences = non_max_suppression(boxes, confidences)
+
+    return boxes, confidences
+
+
+def _run_multi_scale(
+    frame: np.ndarray,
+    model: ort.InferenceSession,
+    input_name: str,
+    region: dict,
+    model_input_size: int,
+    min_confidence: float,
+) -> Tuple[List[List[float]], List[float]]:
+    all_boxes: List[List[float]] = []
+    all_confs: List[float] = []
+
+    half_w = region["width"] // 2
+    half_h = region["height"] // 2
+    sub_regions = [
+        (0, 0, half_w, half_h),
+        (half_w, 0, region["width"], half_h),
+        (0, half_h, half_w, region["height"]),
+        (half_w, half_h, region["width"], region["height"]),
+    ]
+
+    frame_h, frame_w = frame.shape[:2]
+
+    for sx1, sy1, sx2, sy2 in sub_regions:
+        abs_x1 = int(sx1)
+        abs_y1 = int(sy1)
+        abs_x2 = min(int(sx2), frame_w)
+        abs_y2 = min(int(sy2), frame_h)
+        if abs_x2 - abs_x1 < 100 or abs_y2 - abs_y1 < 100:
+            continue
+
+        crop = frame[abs_y1:abs_y2, abs_x1:abs_x2]
+        if crop.size == 0:
+            continue
+
+        crop_input = preprocess_image(crop, model_input_size)
+        crop_outputs = model.run(None, {input_name: crop_input})
+        crop_boxes, crop_confs = postprocess_outputs(
+            crop_outputs,
+            abs_x2 - abs_x1,
+            abs_y2 - abs_y1,
+            model_input_size,
+            min_confidence * 0.7,
+            offset_x=region["left"] + abs_x1,
+            offset_y=region["top"] + abs_y1,
+            min_box_area_ratio=0.00002,
+        )
+
+        all_boxes.extend(crop_boxes)
+        all_confs.extend(crop_confs)
+
+    if all_boxes:
+        all_boxes, all_confs = non_max_suppression(all_boxes, all_confs)
+
+    return all_boxes, all_confs
+
+
+def _run_pass2_refinement(
+    frame: np.ndarray,
+    boxes: List[List[float]],
+    confidences: List[float],
+    model: ort.InferenceSession,
+    input_name: str,
+    region: dict,
+    model_input_size: int,
+    min_confidence: float,
+    min_refine_area: float = 2000.0,
+) -> Tuple[List[List[float]], List[float]]:
+    if not boxes:
+        return boxes, confidences
+
+    frame_h, frame_w = frame.shape[:2]
+    refined_boxes: List[List[float]] = []
+    refined_confs: List[float] = []
+
+    for box, conf in zip(boxes, confidences):
+        box_w = box[2] - box[0]
+        box_h = box[3] - box[1]
+        box_area = box_w * box_h
+
+        if box_area >= min_refine_area:
+            refined_boxes.append(box)
+            refined_confs.append(conf)
+            continue
+
+        margin_x = max(box_w * 3, 80)
+        margin_y = max(box_h * 3, 80)
+
+        rel_x1 = box[0] - region["left"]
+        rel_y1 = box[1] - region["top"]
+        rel_x2 = box[2] - region["left"]
+        rel_y2 = box[3] - region["top"]
+
+        crop_x1 = max(0, int(rel_x1 - margin_x))
+        crop_y1 = max(0, int(rel_y1 - margin_y))
+        crop_x2 = min(frame_w, int(rel_x2 + margin_x))
+        crop_y2 = min(frame_h, int(rel_y2 + margin_y))
+
+        if crop_x2 - crop_x1 < 60 or crop_y2 - crop_y1 < 60:
+            refined_boxes.append(box)
+            refined_confs.append(conf)
+            continue
+
+        crop = frame[crop_y1:crop_y2, crop_x1:crop_x2]
+        crop_input = preprocess_image(crop, model_input_size)
+        crop_outputs = model.run(None, {input_name: crop_input})
+        crop_boxes, crop_confs = postprocess_outputs(
+            crop_outputs,
+            crop_x2 - crop_x1,
+            crop_y2 - crop_y1,
+            model_input_size,
+            min_confidence * 0.6,
+            offset_x=region["left"] + crop_x1,
+            offset_y=region["top"] + crop_y1,
+            min_box_area_ratio=0.00002,
+        )
+
+        if crop_boxes:
+            best_idx = max(range(len(crop_confs)), key=lambda i: crop_confs[i])
+            refined_boxes.append(crop_boxes[best_idx])
+            refined_confs.append(crop_confs[best_idx])
+        else:
+            refined_boxes.append(box)
+            refined_confs.append(conf)
+
+    if len(refined_boxes) > 1:
+        refined_boxes, refined_confs = non_max_suppression(refined_boxes, refined_confs)
+
+    return refined_boxes, refined_confs
 
 
 def _try_hot_swap_model(
@@ -345,7 +539,16 @@ def ai_logic_loop(
                 last_detection_run_time = now_detect
 
                 t0 = time.perf_counter()
-                input_tensor = preprocess_image(latest_frame, config.model_input_size)
+                use_letterbox = getattr(config, "use_letterbox_preprocess", False)
+                if use_letterbox:
+                    input_tensor, lb_scale, lb_padding = preprocess_image_letterbox(
+                        latest_frame, config.model_input_size
+                    )
+                else:
+                    input_tensor = preprocess_image(
+                        latest_frame, config.model_input_size
+                    )
+                    lb_scale, lb_padding = 0.0, None
                 t1 = time.perf_counter()
                 t2 = t3 = t4 = None
 
@@ -361,8 +564,68 @@ def ai_logic_loop(
                         config.min_confidence,
                         latest_region["left"],
                         latest_region["top"],
+                        letterbox_scale=lb_scale,
+                        letterbox_padding=lb_padding,
                     )
-                    boxes, confidences = non_max_suppression(boxes, confidences)
+
+                    use_multi_scale = getattr(config, "multi_scale_inference", True)
+                    region_min_dim = min(
+                        latest_region["width"], latest_region["height"]
+                    )
+                    do_multi_scale = (
+                        use_multi_scale and len(boxes) == 0 and region_min_dim > 320
+                    )
+
+                    if not do_multi_scale:
+                        boxes, confidences = non_max_suppression(boxes, confidences)
+                    else:
+                        half_w = latest_region["width"] // 2
+                        half_h = latest_region["height"] // 2
+                        sub_regions = [
+                            (0, 0, half_w, half_h),
+                            (half_w, 0, latest_region["width"], half_h),
+                            (0, half_h, half_w, latest_region["height"]),
+                            (
+                                half_w,
+                                half_h,
+                                latest_region["width"],
+                                latest_region["height"],
+                            ),
+                        ]
+
+                        frame_h, frame_w = latest_frame.shape[:2]
+
+                        for sx1, sy1, sx2, sy2 in sub_regions:
+                            abs_x1 = int(sx1)
+                            abs_y1 = int(sy1)
+                            abs_x2 = min(int(sx2), frame_w)
+                            abs_y2 = min(int(sy2), frame_h)
+                            if abs_x2 - abs_x1 < 100 or abs_y2 - abs_y1 < 100:
+                                continue
+
+                            crop = latest_frame[abs_y1:abs_y2, abs_x1:abs_x2]
+                            if crop.size == 0:
+                                continue
+
+                            crop_input = preprocess_image(crop, config.model_input_size)
+                            crop_outputs = model.run(None, {input_name: crop_input})
+                            crop_boxes, crop_confs = postprocess_outputs(
+                                crop_outputs,
+                                abs_x2 - abs_x1,
+                                abs_y2 - abs_y1,
+                                config.model_input_size,
+                                config.min_confidence * 0.7,
+                                offset_x=latest_region["left"] + abs_x1,
+                                offset_y=latest_region["top"] + abs_y1,
+                                min_box_area_ratio=0.00002,
+                            )
+
+                            boxes.extend(crop_boxes)
+                            confidences.extend(crop_confs)
+
+                        if boxes:
+                            boxes, confidences = non_max_suppression(boxes, confidences)
+
                     t4 = time.perf_counter()
                     config.last_detection_time = time.time()
                     config.detection_frame_count = (
@@ -391,8 +654,8 @@ def ai_logic_loop(
                     confidences,
                     state,
                     current_time,
-                    confirm_frames=2,
-                    expire_time=0.3,
+                    confirm_frames=1,
+                    expire_time=0.5,
                 )
 
                 if is_aiming and boxes:
