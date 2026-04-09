@@ -1,0 +1,89 @@
+{
+  "name": "CS Normal",
+  "created_time": "2026-01-01T00:00:00",
+  "description": "CS:GO/CS2 icin normal ayar - Nisan tusu ile calisir, dengeli ve kararl hareket",
+  "config": {
+    "fov_size": 222,
+    "detect_range_size": 1080,
+    "min_confidence": 0.25,
+    "detect_interval": 0.015,
+    "screenshot_interval": 0.010,
+    "idle_detect_interval": 0.05,
+    "idle_detect_enabled": true,
+    "model_path": "Model\\Roblox_8n.onnx",
+    "model_input_size": 640,
+    "current_provider": "DmlExecutionProvider",
+    "dml_cpu_fallback": true,
+
+    "pid_kp_x": 0.26,
+    "pid_ki_x": 0.01,
+    "pid_kd_x": 0.02,
+    "pid_kp_y": 0.26,
+    "pid_ki_y": 0.01,
+    "pid_kd_y": 0.02,
+
+    "aim_y_reduce_enabled": false,
+    "aim_y_reduce_delay": 0.60,
+
+    "aim_part": "head",
+    "single_target_mode": true,
+    "head_width_ratio": 0.38,
+    "head_height_ratio": 0.26,
+    "body_width_ratio": 0.87,
+
+    "bezier_curve_enabled": true,
+    "bezier_curve_strength": 0.35,
+    "bezier_curve_steps": 4,
+
+    "tracker_enabled": false,
+    "tracker_prediction_time": 0.025,
+    "tracker_smoothing_factor": 0.66,
+    "tracker_stop_threshold": 10.0,
+    "tracker_show_prediction": true,
+
+    "AimKeys": [1, 6, 2],
+    "aim_toggle_key": 45,
+    "auto_fire_key": 6,
+    "auto_fire_key2": 4,
+    "always_auto_fire": false,
+
+    "auto_fire_delay": 0.0,
+    "auto_fire_interval": 0.10,
+    "auto_fire_target_part": "both",
+
+    "show_confidence": true,
+    "show_fov": true,
+    "show_boxes": true,
+    "show_detect_range": false,
+    "show_status_panel": true,
+    "status_panel_show_auto_aim": true,
+    "status_panel_show_model": true,
+    "status_panel_show_mouse_move": true,
+    "status_panel_show_mouse_click": true,
+    "status_panel_show_screenshot_method": true,
+    "status_panel_show_screenshot_fps": true,
+    "status_panel_show_detection_fps": true,
+    "show_console": false,
+
+    "AimToggle": true,
+    "keep_detecting": true,
+    "always_aim": false,
+    "fov_follow_mouse": true,
+
+    "performance_mode": true,
+    "max_queue_size": 1,
+    "mouse_move_method": "mouse_event",
+    "mouse_click_method": "mouse_event",
+    "arduino_com_port": "",
+    "makcu_com_port": "",
+    "xbox_sensitivity": 1.0,
+    "xbox_deadzone": 0.05,
+    "xbox_auto_connect": true,
+
+    "enable_latency_stats": false,
+    "latency_stats_interval": 1.0,
+    "latency_stats_alpha": 0.2,
+
+    "screenshot_method": "dxcam"
+  }
+}
