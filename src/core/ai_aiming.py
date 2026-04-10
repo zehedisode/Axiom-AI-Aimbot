@@ -8,7 +8,7 @@ from win_utils import send_mouse_move
 
 from .ai_loop_state import LoopState
 from .inference import PIDController
-from .smart_tracker import SmartTracker
+from .smart_tracker import KalmanTracker
 
 if TYPE_CHECKING:
     from .config import Config
@@ -130,20 +130,12 @@ def process_aiming(
         valid_targets.sort(key=lambda x: x[0])
         _, target_x, target_y, box = valid_targets[0]
 
-    tracker_enabled = getattr(config, "tracker_enabled", False)
-    if tracker_enabled:
-        if state.smart_tracker is None:
-            state.smart_tracker = SmartTracker(
-                smoothing_factor=getattr(config, "tracker_smoothing_factor", 0.5),
-                stop_threshold=getattr(config, "tracker_stop_threshold", 20.0),
-            )
-            state.tracker_last_time = current_time
-        else:
-            state.smart_tracker.alpha = getattr(config, "tracker_smoothing_factor", 0.5)
-            state.smart_tracker.stop_threshold = getattr(
-                config, "tracker_stop_threshold", 20.0
-            )
+    # ── Kalman Filter Prediction (from Aimmy V2) ──
+    use_kalman = getattr(config, "use_kalman_tracker", True)
+    if use_kalman and state.kalman_tracker is not None:
+        tracker: KalmanTracker = state.kalman_tracker
 
+        # Check if target jumped (different target) — reset if so
         current_box_tuple = tuple(box)
         if state.tracker_last_target_box is not None:
             last_box = state.tracker_last_target_box
@@ -153,18 +145,23 @@ def process_aiming(
             curr_cy = (box[1] + box[3]) * 0.5
             box_distance_sq = (curr_cx - last_cx) ** 2 + (curr_cy - last_cy) ** 2
             if box_distance_sq > 40000:
-                state.smart_tracker.reset()
+                tracker.reset()
         state.tracker_last_target_box = current_box_tuple
 
-        dt = current_time - state.tracker_last_time
-        if dt <= 0:
-            dt = 0.01
+        # Update dt
+        if state.tracker_last_time <= 0:
+            dt = 0.016  # ~60fps default
+        else:
+            dt = current_time - state.tracker_last_time
         state.tracker_last_time = current_time
 
-        state.smart_tracker.update(target_x, target_y, dt)
+        if dt <= 0:
+            dt = 0.01
 
-        prediction_time = getattr(config, "tracker_prediction_time", 0.05)
-        pred_x, pred_y = state.smart_tracker.get_predicted_position(prediction_time)
+        # Update Kalman with measurement, then predict
+        tracker.update(target_x, target_y)
+        prediction_time = float(getattr(config, "tracker_prediction_time", 0.035))
+        pred_x, pred_y = tracker.predict(prediction_time)
 
         config.tracker_current_x = target_x
         config.tracker_current_y = target_y
@@ -173,11 +170,63 @@ def process_aiming(
         config.tracker_has_prediction = True
 
         target_x, target_y = pred_x, pred_y
+
+    # ── Legacy SmartTracker (fallback, only if Kalman is disabled) ──
+    elif not use_kalman:
+        tracker_enabled = getattr(config, "tracker_enabled", False)
+        if tracker_enabled:
+            from .smart_tracker import SmartTracker
+
+            if state.smart_tracker is None:
+                state.smart_tracker = SmartTracker(
+                    smoothing_factor=getattr(config, "tracker_smoothing_factor", 0.5),
+                    stop_threshold=getattr(config, "tracker_stop_threshold", 20.0),
+                )
+                state.tracker_last_time = current_time
+            else:
+                state.smart_tracker.alpha = getattr(
+                    config, "tracker_smoothing_factor", 0.5
+                )
+                state.smart_tracker.stop_threshold = getattr(
+                    config, "tracker_stop_threshold", 20.0
+                )
+
+            current_box_tuple = tuple(box)
+            if state.tracker_last_target_box is not None:
+                last_box = state.tracker_last_target_box
+                last_cx = (last_box[0] + last_box[2]) * 0.5
+                last_cy = (last_box[1] + last_box[3]) * 0.5
+                curr_cx = (box[0] + box[2]) * 0.5
+                curr_cy = (box[1] + box[3]) * 0.5
+                box_distance_sq = (curr_cx - last_cx) ** 2 + (curr_cy - last_cy) ** 2
+                if box_distance_sq > 40000:
+                    state.smart_tracker.reset()
+            state.tracker_last_target_box = current_box_tuple
+
+            dt = current_time - state.tracker_last_time
+            if dt <= 0:
+                dt = 0.01
+            state.tracker_last_time = current_time
+
+            state.smart_tracker.update(target_x, target_y, dt)
+
+            prediction_time = getattr(config, "tracker_prediction_time", 0.05)
+            pred_x, pred_y = state.smart_tracker.get_predicted_position(prediction_time)
+
+            config.tracker_current_x = target_x
+            config.tracker_current_y = target_y
+            config.tracker_predicted_x = pred_x
+            config.tracker_predicted_y = pred_y
+            config.tracker_has_prediction = True
+
+            target_x, target_y = pred_x, pred_y
+        else:
+            config.tracker_has_prediction = False
+            if state.smart_tracker is not None:
+                state.smart_tracker.reset()
+                state.smart_tracker = None
     else:
         config.tracker_has_prediction = False
-        if state.smart_tracker is not None:
-            state.smart_tracker.reset()
-            state.smart_tracker = None
 
     errorX = target_x - crosshair_x
     errorY = target_y - crosshair_y
@@ -188,13 +237,9 @@ def process_aiming(
     if getattr(config, "bezier_curve_enabled", False):
         if error_distance > 6.0:
             if not state.target_locked:
-                state.target_locked = False
-                if (
-                    not hasattr(state, "_bezier_needs_new_scalar")
-                    or state._bezier_needs_new_scalar
-                ):
+                if state.bezier_needs_new_scalar:
                     state.bezier_curve_scalar = random.uniform(-1.0, 1.0)
-                    state._bezier_needs_new_scalar = False
+                    state.bezier_needs_new_scalar = False
 
             strength = float(getattr(config, "bezier_curve_strength", 0.08))
             fade = min(1.0, error_distance / 150.0)
@@ -208,7 +253,7 @@ def process_aiming(
         else:
             # Within 6px: disable bezier, aim directly at target
             state.target_locked = True
-            state._bezier_needs_new_scalar = True
+            state.bezier_needs_new_scalar = True
     else:
         state.target_locked = error_distance <= 2.0
 
@@ -223,6 +268,11 @@ def process_aiming(
         if aim_duration > delay:
             fade_out = max(0.0, 1.0 - (aim_duration - delay) / 0.3)
             dy *= fade_out
+
+    # ── EMA Mouse Output Smoothing (from Aimmy V2) ──
+    ema_enabled = getattr(config, "ema_mouse_smoothing", True)
+    if ema_enabled and state.ema_smoother is not None:
+        dx, dy = state.ema_smoother.smooth(dx, dy)
 
     move_x, move_y = int(round(dx)), int(round(dy))
 

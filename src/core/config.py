@@ -117,6 +117,26 @@ class Config:
             0.15  # Seconds before ghost detection expires (lower = less sticky)
         )
 
+        # ── Aimmy V2 Integration Settings ──
+        # Kalman Filter Tracker (replaces legacy SmartTracker)
+        self.use_kalman_tracker: bool = True  # Use Kalman filter for prediction
+        self.kalman_process_noise: float = (
+            0.001  # Q matrix: process noise (lower = smoother)
+        )
+        self.kalman_measurement_noise: float = (
+            0.01  # R matrix: measurement noise (higher = smoother)
+        )
+
+        # Sticky Aim (from Aimmy V2 AIManager.cs HandleStickyAim)
+        # Grace period when target is lost, velocity-based position prediction
+        self.sticky_aim_enabled: bool = True  # Enable sticky aim persistence
+
+        # EMA Mouse Output Smoothing (from Aimmy V2 MouseManager.cs)
+        self.ema_mouse_smoothing: bool = True  # Enable EMA smoothing on mouse output
+        self.ema_smoothing_factor: float = (
+            0.35  # Smoothing factor (0=off, 0.5=heavy, 1.0=extreme)
+        )
+
         # Tracker prediction data (updated by ai_loop, read by overlay)
         self.tracker_predicted_x: float = 0.0  # Predicted X coordinate
         self.tracker_predicted_y: float = 0.0  # Predicted Y coordinate
@@ -304,6 +324,12 @@ class Config:
             "detection_zoom": self.detection_zoom,
             "temporal_confirm_frames": self.temporal_confirm_frames,
             "temporal_expire_time": self.temporal_expire_time,
+            "use_kalman_tracker": self.use_kalman_tracker,
+            "kalman_process_noise": self.kalman_process_noise,
+            "kalman_measurement_noise": self.kalman_measurement_noise,
+            "sticky_aim_enabled": self.sticky_aim_enabled,
+            "ema_mouse_smoothing": self.ema_mouse_smoothing,
+            "ema_smoothing_factor": self.ema_smoothing_factor,
             "dark_mode": self.dark_mode,
             "enable_acrylic": self.enable_acrylic,
             "acrylic_window_alpha": self.acrylic_window_alpha,

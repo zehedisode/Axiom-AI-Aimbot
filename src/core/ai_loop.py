@@ -694,6 +694,19 @@ def ai_logic_loop(
                         head_height_ratio=config.head_height_ratio,
                     )
 
+                # ── Sticky Aim (from Aimmy V2) ──
+                # Applied BEFORE temporal filter to provide grace period
+                # and velocity prediction during temporary detection loss
+                sticky_enabled = getattr(config, "sticky_aim_enabled", True)
+                if sticky_enabled and state.sticky_aim is not None:
+                    boxes, confidences = state.sticky_aim.update(
+                        boxes,
+                        confidences,
+                        crosshair_x,
+                        crosshair_y,
+                        enabled=True,
+                    )
+
                 boxes, confidences = apply_temporal_filter(
                     boxes,
                     confidences,
@@ -704,6 +717,9 @@ def ai_logic_loop(
                 )
 
                 if is_aiming and boxes:
+                    # Ensure Aimmy V2 subsystems are initialized
+                    state.ensure_aimmy_systems(config)
+
                     process_aiming(
                         config,
                         boxes,
@@ -720,6 +736,9 @@ def ai_logic_loop(
                     config.tracker_has_prediction = False
                     pid_x.reset()
                     pid_y.reset()
+                    # Reset EMA smoother when not aiming to avoid stale state
+                    if state.ema_smoother is not None:
+                        state.ema_smoother.reset()
 
                 update_queues(
                     overlay_boxes_queue,

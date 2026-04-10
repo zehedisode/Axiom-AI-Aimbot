@@ -47,6 +47,13 @@
     "temporal_confirm_frames": 2,
     "temporal_expire_time": 0.15,
 
+    "use_kalman_tracker": true,
+    "kalman_process_noise": 0.001,
+    "kalman_measurement_noise": 0.01,
+    "sticky_aim_enabled": true,
+    "ema_mouse_smoothing": true,
+    "ema_smoothing_factor": 0.35,
+
     "AimKeys": [17, 1, 6, 2],
     "aim_toggle_key": 45,
     "auto_fire_key": 6,

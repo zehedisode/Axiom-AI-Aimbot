@@ -83,5 +83,11 @@
   "multi_scale_inference": true,
   "detection_zoom": 2.0,
   "temporal_confirm_frames": 2,
-  "temporal_expire_time": 0.15
+  "temporal_expire_time": 0.15,
+  "use_kalman_tracker": true,
+  "kalman_process_noise": 0.001,
+  "kalman_measurement_noise": 0.01,
+  "sticky_aim_enabled": true,
+  "ema_mouse_smoothing": true,
+  "ema_smoothing_factor": 0.35
 }
