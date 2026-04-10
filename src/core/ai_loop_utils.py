@@ -154,24 +154,34 @@ def apply_temporal_filter(
                 best_iou = iou
                 best_match_idx = i
 
-        if best_iou > 0.05:
+        # Higher IoU threshold (0.15) to reject random position jumps (false positives)
+        if best_iou > 0.15:
             best_box = boxes[best_match_idx]
             best_conf = confidences[best_match_idx]
         else:
+            # New position doesn't match previous target — treat as new detection
             best_box = boxes[0]
             best_conf = confidences[0]
+
+    # Reject tiny boxes that are likely false positives (min 8px x 8px)
+    box_w = best_box[2] - best_box[0]
+    box_h = best_box[3] - best_box[1]
+    if box_w < 8 or box_h < 8:
+        return [], []
 
     current_box_tuple = tuple(best_box)
 
     if state.target_last_box is not None:
         iou_with_last = _box_iou(list(state.target_last_box), best_box)
-        if iou_with_last > 0.05:
+        if iou_with_last > 0.15:
             state.target_confirm_count = min(
                 state.target_confirm_count + 1,
                 confirm_frames + 10,
             )
         else:
-            state.target_confirm_count = max(1, state.target_confirm_count - 1)
+            # Position jumped — reset confirm count (likely false positive)
+            state.target_confirm_count = 1
+            state.smoothed_box = None  # Reset smoothing to avoid ghosting
     else:
         state.target_confirm_count = 1
 
@@ -180,11 +190,12 @@ def apply_temporal_filter(
 
     if state.smoothed_box is not None:
         iou_check = _box_iou(state.smoothed_box, best_box)
-        if iou_check > 0.05:
+        if iou_check > 0.15:
             box_area = (best_box[2] - best_box[0]) * (best_box[3] - best_box[1])
-            # Higher alpha = smoother, less jitter. Small targets need even more smoothing.
-            alpha = 0.65 if box_area < 800 else 0.55
+            # Higher alpha = smoother tracking, less jitter
+            alpha = 0.70 if box_area < 800 else 0.60
             best_box = _smooth_box(state.smoothed_box, best_box, alpha=alpha)
+        # If IoU is low, don't smooth — accept the raw position directly
 
     state.smoothed_box = list(best_box)
 

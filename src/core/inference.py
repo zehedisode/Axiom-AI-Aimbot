@@ -29,21 +29,24 @@ class PIDController:
     def update(self, error: float) -> float:
         dist = self._error_distance
 
-        # Dead zone: only suppress when truly on-target (sub-pixel)
-        if dist < 0.5:
+        # Dead zone: suppress sub-pixel noise (prevents micro-jitter)
+        if dist < 1.0:
             self.integral *= 0.5
             self.previous_error = error
             return 0.0
 
-        # Near-target precision mode: reduce gains to prevent oscillation/jitter
-        # but still allow smooth micro-adjustments for precise head tracking
-        if dist < 8.0:
-            self.integral *= 0.7
-            # Scale gains proportionally — closer = gentler
-            scale = max(0.3, dist / 8.0)
+        # Near-target precision mode: smoothly reduce gains to prevent jitter
+        # while still allowing fine adjustments
+        if dist < 10.0:
+            # Smooth quadratic fade — gentler as we get closer
+            t = (dist - 1.0) / 9.0  # 0.0 at 1px, 1.0 at 10px
+            scale = 0.25 + 0.75 * (t * t)  # quadratic ease-in
             effective_kp = self.Kp * scale
-            effective_kd = self.Kd * (0.5 + 0.5 * scale)
+            effective_kd = self.Kd * (0.6 + 0.4 * t)
             derivative = error - self.previous_error
+            # Don't aggressively decay integral near target — causes drift
+            self.integral = self.integral * 0.95 + error * 0.05
+            self.integral = max(-200.0, min(200.0, self.integral))
             output = (
                 effective_kp * error
                 + self.Ki * self.integral
@@ -52,6 +55,7 @@ class PIDController:
             self.previous_error = error
             return output
 
+        # Full power mode — target is far away
         self.integral += error
         self.integral = max(-500.0, min(500.0, self.integral))
 
@@ -59,17 +63,6 @@ class PIDController:
         output = self.Kp * error + self.Ki * self.integral + self.Kd * derivative
 
         self.previous_error = error
-
-        return output
-
-        self.integral += error
-        self.integral = max(-500.0, min(500.0, self.integral))
-
-        derivative = error - self.previous_error
-        output = self.Kp * error + self.Ki * self.integral + self.Kd * derivative
-
-        self.previous_error = error
-
         return output
 
 
@@ -241,7 +234,7 @@ def postprocess_outputs(
     min_confidence: float,
     offset_x: int = 0,
     offset_y: int = 0,
-    min_box_area_ratio: float = 0.00003,
+    min_box_area_ratio: float = 0.0001,
     letterbox_scale: float = 0.0,
     letterbox_padding: Tuple[int, int, int, int] | None = None,
 ) -> Tuple[List[List[float]], List[float]]:
@@ -296,7 +289,7 @@ def postprocess_outputs(
     image_area = original_width * original_height
     min_box_area = image_area * min_box_area_ratio
 
-    min_box_dim = 3.0
+    min_box_dim = 6.0
 
     aspect_ratio = box_ws / np.maximum(box_hs, 1.0)
 

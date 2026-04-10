@@ -108,10 +108,10 @@ class Config:
 
         # Temporal filter settings (stabilizes detection over time)
         self.temporal_confirm_frames: int = (
-            2  # Frames to confirm a target before tracking (reduces false positives)
+            2  # Frames to confirm a target before tracking
         )
         self.temporal_expire_time: float = (
-            0.4  # Seconds before an unconfirmed target expires
+            0.15  # Seconds before ghost detection expires (lower = less sticky)
         )
 
         # Tracker prediction data (updated by ai_loop, read by overlay)

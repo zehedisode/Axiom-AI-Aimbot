@@ -78,5 +78,5 @@
   "use_letterbox_preprocess": true,
   "multi_scale_inference": true,
   "temporal_confirm_frames": 2,
-  "temporal_expire_time": 0.4
+  "temporal_expire_time": 0.15
 }
