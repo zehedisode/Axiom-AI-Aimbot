@@ -182,7 +182,8 @@ def apply_temporal_filter(
         iou_check = _box_iou(state.smoothed_box, best_box)
         if iou_check > 0.05:
             box_area = (best_box[2] - best_box[0]) * (best_box[3] - best_box[1])
-            alpha = 0.5 if box_area < 800 else 0.4
+            # Higher alpha = smoother, less jitter. Small targets need even more smoothing.
+            alpha = 0.65 if box_area < 800 else 0.55
             best_box = _smooth_box(state.smoothed_box, best_box, alpha=alpha)
 
     state.smoothed_box = list(best_box)
@@ -205,7 +206,7 @@ def find_closest_target(
         return [], []
 
     closest_box = None
-    min_distance_sq = float("inf")
+    best_score = float("inf")
     closest_confidence = 0.5
 
     for i, box in enumerate(boxes):
@@ -226,10 +227,16 @@ def find_closest_target(
         dy = target_y - crosshair_y
         distance_sq = dx * dx + dy * dy
 
-        if distance_sq < min_distance_sq:
-            min_distance_sq = distance_sq
+        # Weighted score: closer distance + higher confidence = better target
+        # Confidence bonus reduces effective distance for high-confidence detections
+        conf = confidences[i] if i < len(confidences) else 0.5
+        conf_penalty = max(0.3, 1.0 - conf * 0.5)  # High conf → lower penalty
+        effective_dist = distance_sq * conf_penalty
+
+        if effective_dist < best_score:
+            best_score = effective_dist
             closest_box = box
-            closest_confidence = confidences[i] if i < len(confidences) else 0.5
+            closest_confidence = conf
 
     if closest_box:
         return [closest_box], [closest_confidence]

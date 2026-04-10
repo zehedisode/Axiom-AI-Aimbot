@@ -39,6 +39,7 @@ from .screen_capture import (
     initialize_screen_capture,
     reinitialize_if_method_changed,
 )
+from .session_utils import create_run_options
 
 if TYPE_CHECKING:
     import onnxruntime as ort
@@ -55,10 +56,11 @@ def _run_tta(
     min_confidence: float,
     lb_scale: float,
     lb_padding: tuple | None,
+    run_options: object | None = None,
 ) -> Tuple[List[List[float]], List[float]]:
     original_blob = preprocess_image(frame, model_input_size)
 
-    outputs = model.run(None, {input_name: original_blob})
+    outputs = model.run(None, {input_name: original_blob}, run_options=run_options)
     boxes, confidences = postprocess_outputs(
         outputs,
         region["width"],
@@ -73,7 +75,7 @@ def _run_tta(
 
     flipped = frame[:, ::-1].copy()
     flipped_blob = preprocess_image(flipped, model_input_size)
-    outputs_flip = model.run(None, {input_name: flipped_blob})
+    outputs_flip = model.run(None, {input_name: flipped_blob}, run_options=run_options)
     boxes_flip, conf_flip = postprocess_outputs(
         outputs_flip,
         region["width"],
@@ -113,6 +115,7 @@ def _run_multi_scale(
     region: dict,
     model_input_size: int,
     min_confidence: float,
+    run_options: object | None = None,
 ) -> Tuple[List[List[float]], List[float]]:
     all_boxes: List[List[float]] = []
     all_confs: List[float] = []
@@ -141,7 +144,9 @@ def _run_multi_scale(
             continue
 
         crop_input = preprocess_image(crop, model_input_size)
-        crop_outputs = model.run(None, {input_name: crop_input})
+        crop_outputs = model.run(
+            None, {input_name: crop_input}, run_options=run_options
+        )
         crop_boxes, crop_confs = postprocess_outputs(
             crop_outputs,
             abs_x2 - abs_x1,
@@ -172,6 +177,7 @@ def _run_pass2_refinement(
     model_input_size: int,
     min_confidence: float,
     min_refine_area: float = 2000.0,
+    run_options: object | None = None,
 ) -> Tuple[List[List[float]], List[float]]:
     if not boxes:
         return boxes, confidences
@@ -210,7 +216,9 @@ def _run_pass2_refinement(
 
         crop = frame[crop_y1:crop_y2, crop_x1:crop_x2]
         crop_input = preprocess_image(crop, model_input_size)
-        crop_outputs = model.run(None, {input_name: crop_input})
+        crop_outputs = model.run(
+            None, {input_name: crop_input}, run_options=run_options
+        )
         crop_boxes, crop_confs = postprocess_outputs(
             crop_outputs,
             crop_x2 - crop_x1,
@@ -259,18 +267,9 @@ def _try_hot_swap_model(
         return model, current_model_path, model.get_inputs()[0].name
 
     try:
-        import onnxruntime as _ort
+        from .session_utils import create_inference_session
 
-        from .session_utils import optimize_onnx_session
-
-        providers = ["DmlExecutionProvider"]
-        session_options = optimize_onnx_session(config)
-        if session_options:
-            new_model = _ort.InferenceSession(
-                abs_model_path, providers=providers, sess_options=session_options
-            )
-        else:
-            new_model = _ort.InferenceSession(abs_model_path, providers=providers)
+        new_model = create_inference_session(abs_model_path, config)
 
         input_name = new_model.get_inputs()[0].name
         actual_providers = new_model.get_providers()
@@ -341,6 +340,7 @@ def ai_logic_loop(
     """AI 推理和滑鼠控制的主要循環"""
 
     input_name = model.get_inputs()[0].name
+    run_options = create_run_options()
 
     pid_x = PIDController(config.pid_kp_x, config.pid_ki_x, config.pid_kd_x)
     pid_y = PIDController(config.pid_kp_y, config.pid_ki_y, config.pid_kd_y)
@@ -554,7 +554,9 @@ def ai_logic_loop(
 
                 try:
                     t2 = time.perf_counter()
-                    outputs = model.run(None, {input_name: input_tensor})
+                    outputs = model.run(
+                        None, {input_name: input_tensor}, run_options=run_options
+                    )
                     t3 = time.perf_counter()
                     boxes, confidences = postprocess_outputs(
                         outputs,
@@ -608,7 +610,9 @@ def ai_logic_loop(
                                 continue
 
                             crop_input = preprocess_image(crop, config.model_input_size)
-                            crop_outputs = model.run(None, {input_name: crop_input})
+                            crop_outputs = model.run(
+                                None, {input_name: crop_input}, run_options=run_options
+                            )
                             crop_boxes, crop_confs = postprocess_outputs(
                                 crop_outputs,
                                 abs_x2 - abs_x1,
@@ -654,8 +658,8 @@ def ai_logic_loop(
                     confidences,
                     state,
                     current_time,
-                    confirm_frames=1,
-                    expire_time=0.5,
+                    confirm_frames=int(getattr(config, "temporal_confirm_frames", 2)),
+                    expire_time=float(getattr(config, "temporal_expire_time", 0.4)),
                 )
 
                 if is_aiming and boxes:

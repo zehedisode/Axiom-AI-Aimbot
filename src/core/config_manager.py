@@ -195,6 +195,22 @@ class ConfigManager:
                 config_instance, "latency_stats_interval", 1.0
             ),
             "latency_stats_alpha": getattr(config_instance, "latency_stats_alpha", 0.2),
+            # Screenshot method
+            "screenshot_method": getattr(config_instance, "screenshot_method", "mss"),
+            # Letterbox & multi-scale
+            "use_letterbox_preprocess": getattr(
+                config_instance, "use_letterbox_preprocess", False
+            ),
+            "multi_scale_inference": getattr(
+                config_instance, "multi_scale_inference", True
+            ),
+            # Temporal filter
+            "temporal_confirm_frames": getattr(
+                config_instance, "temporal_confirm_frames", 2
+            ),
+            "temporal_expire_time": getattr(
+                config_instance, "temporal_expire_time", 0.4
+            ),
         }
 
     def load_config(self, config_instance: Config, config_name: str) -> bool:
@@ -210,16 +226,45 @@ class ConfigManager:
 
             config_data = config_data.get("config", {})
             applied = 0
+            skipped = 0
             for key, value in config_data.items():
-                if hasattr(config_instance, key):
-                    try:
-                        setattr(config_instance, key, value)
-                        applied += 1
-                    except (TypeError, ValueError, AttributeError) as e:
-                        print(
-                            f"[ConfigManager] Skipped invalid key '{key}={value}': {e}"
-                        )
-            print(f"[ConfigManager] Loaded '{config_name}': {applied} settings applied")
+                if not hasattr(config_instance, key):
+                    skipped += 1
+                    continue
+                try:
+                    # Type-safe setattr: get current type and coerce value
+                    current_val = getattr(config_instance, key, None)
+                    if current_val is not None:
+                        expected_type = type(current_val)
+                        if not isinstance(value, expected_type):
+                            # Try to coerce the value
+                            try:
+                                if expected_type == bool:
+                                    # Handle bool carefully — int is not bool in Python
+                                    if isinstance(value, (int, float)):
+                                        value = bool(value)
+                                    elif isinstance(value, str):
+                                        value = value.lower() in ("true", "1", "yes")
+                                elif expected_type == int:
+                                    value = int(value)
+                                elif expected_type == float:
+                                    value = float(value)
+                                elif expected_type == str:
+                                    value = str(value)
+                                elif expected_type == list:
+                                    if isinstance(value, (list, tuple)):
+                                        value = list(value)
+                            except (ValueError, TypeError):
+                                skipped += 1
+                                continue
+                    setattr(config_instance, key, value)
+                    applied += 1
+                except (TypeError, ValueError, AttributeError) as e:
+                    skipped += 1
+                    print(f"[ConfigManager] Skipped invalid key '{key}={value}': {e}")
+            print(
+                f"[ConfigManager] Loaded '{config_name}': {applied} applied, {skipped} skipped"
+            )
 
             config_instance.detect_interval = max(
                 0.001, min(0.1, config_instance.detect_interval)
@@ -267,6 +312,9 @@ class ConfigManager:
             return True
         except (OSError, json.JSONDecodeError) as e:
             print(f"[ConfigManager] Load failed: {e}")
+            return False
+        except Exception as e:
+            print(f"[ConfigManager] Unexpected error loading '{config_name}': {e}")
             return False
 
     def delete_config(self, config_name: str) -> bool:

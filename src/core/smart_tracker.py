@@ -8,10 +8,12 @@ class SmartTracker:
         smoothing_factor: float = 0.5,
         stop_threshold: float = 20.0,
         position_deadzone: float = 3.0,
+        max_prediction_pixels: float = 40.0,
     ):
         self.alpha = smoothing_factor
         self.stop_threshold = stop_threshold
         self.position_deadzone = position_deadzone
+        self.max_prediction_pixels = max_prediction_pixels
 
         self.last_x: float | None = None
         self.last_y: float | None = None
@@ -65,6 +67,15 @@ class SmartTracker:
 
         pred_x = self.last_x + self.vx * prediction_time
         pred_y = self.last_y + self.vy * prediction_time
+
+        # Clamp prediction to max distance to prevent overshoot jitter
+        dx = pred_x - self.last_x
+        dy = pred_y - self.last_y
+        dist = np.sqrt(dx * dx + dy * dy)
+        if dist > self.max_prediction_pixels:
+            scale = self.max_prediction_pixels / dist
+            pred_x = self.last_x + dx * scale
+            pred_y = self.last_y + dy * scale
 
         return pred_x, pred_y
 

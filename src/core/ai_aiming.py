@@ -170,13 +170,19 @@ def process_aiming(
     error_distance = math.sqrt(errorX * errorX + errorY * errorY)
 
     if getattr(config, "bezier_curve_enabled", False):
-        if error_distance > 8.0:
+        if error_distance > 3.0:
             if not state.target_locked:
                 state.target_locked = False
-                state.bezier_curve_scalar = random.uniform(-1.0, 1.0)
+                # Only randomize ONCE when losing lock, not every frame
+                if (
+                    not hasattr(state, "_bezier_needs_new_scalar")
+                    or state._bezier_needs_new_scalar
+                ):
+                    state.bezier_curve_scalar = random.uniform(-1.0, 1.0)
+                    state._bezier_needs_new_scalar = False
 
-            strength = float(getattr(config, "bezier_curve_strength", 0.35))
-            fade = min(1.0, error_distance / 80.0)
+            strength = float(getattr(config, "bezier_curve_strength", 0.08))
+            fade = min(1.0, error_distance / 120.0)
             effective_strength = strength * fade
 
             perp_x = -errorY
@@ -186,8 +192,9 @@ def process_aiming(
             errorY += perp_y * effective_strength * state.bezier_curve_scalar
         else:
             state.target_locked = True
+            state._bezier_needs_new_scalar = True
     else:
-        state.target_locked = error_distance <= 5.0
+        state.target_locked = error_distance <= 3.0
 
     pid_x.set_distance_context(error_distance)
     pid_y.set_distance_context(error_distance)

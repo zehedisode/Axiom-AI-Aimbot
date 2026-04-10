@@ -1,45 +1,48 @@
 {
   "name": "CS Agresif",
-  "created_time": "2026-01-01T00:00:00",
-  "description": "CS:GO/CS2 icin agresif ayar - Nisan tusu gerektirmez, kafaya aninda kilitlenir",
+  "created_time": "2026-04-10T00:00:00",
+  "description": "CS2 icin optimize edilmis agresif ayar - Yuksek algilama, hizli kilitlenme, kafaya hassas nişan",
   "config": {
-    "fov_size": 200,
+    "fov_size": 240,
     "detect_range_size": 1080,
-    "min_confidence": 0.40,
+    "min_confidence": 0.25,
     "detect_interval": 0.005,
     "screenshot_interval": 0.005,
-    "idle_detect_interval": 0.05,
+    "idle_detect_interval": 0.03,
     "idle_detect_enabled": false,
-    "model_path": "Model\\Roblox_8n.onnx",
+    "model_path": "Model\\CS2_8n.onnx",
     "model_input_size": 640,
-    "current_provider": "DmlExecutionProvider",
+    "current_provider": "CUDAExecutionProvider",
     "dml_cpu_fallback": true,
 
-    "pid_kp_x": 0.40,
-    "pid_ki_x": 0.015,
-    "pid_kd_x": 0.05,
-    "pid_kp_y": 0.42,
-    "pid_ki_y": 0.015,
-    "pid_kd_y": 0.05,
+    "pid_kp_x": 0.38,
+    "pid_ki_x": 0.005,
+    "pid_kd_x": 0.08,
+    "pid_kp_y": 0.40,
+    "pid_ki_y": 0.005,
+    "pid_kd_y": 0.08,
 
-    "aim_y_reduce_enabled": true,
-    "aim_y_reduce_delay": 0.50,
+    "aim_y_reduce_enabled": false,
+    "aim_y_reduce_delay": 1.5,
 
     "aim_part": "head",
     "single_target_mode": true,
-    "head_width_ratio": 0.45,
-    "head_height_ratio": 0.30,
+    "head_width_ratio": 0.42,
+    "head_height_ratio": 0.28,
     "body_width_ratio": 0.87,
 
     "bezier_curve_enabled": true,
-    "bezier_curve_strength": 0.12,
-    "bezier_curve_steps": 4,
+    "bezier_curve_strength": 0.08,
+    "bezier_curve_steps": 6,
 
     "tracker_enabled": true,
-    "tracker_prediction_time": 0.020,
-    "tracker_smoothing_factor": 0.55,
-    "tracker_stop_threshold": 15.0,
+    "tracker_prediction_time": 0.035,
+    "tracker_smoothing_factor": 0.60,
+    "tracker_stop_threshold": 12.0,
     "tracker_show_prediction": true,
+
+    "use_letterbox_preprocess": true,
+    "multi_scale_inference": true,
 
     "AimKeys": [1, 6, 2],
     "aim_toggle_key": 45,
@@ -48,7 +51,7 @@
     "always_auto_fire": false,
 
     "auto_fire_delay": 0.0,
-    "auto_fire_interval": 0.06,
+    "auto_fire_interval": 0.05,
     "auto_fire_target_part": "head",
 
     "show_confidence": true,
@@ -80,9 +83,9 @@
     "xbox_deadzone": 0.05,
     "xbox_auto_connect": true,
 
-    "enable_latency_stats": false,
-    "latency_stats_interval": 1.0,
-    "latency_stats_alpha": 0.2,
+    "enable_latency_stats": true,
+    "latency_stats_interval": 2.0,
+    "latency_stats_alpha": 0.15,
 
     "screenshot_method": "dxcam"
   }

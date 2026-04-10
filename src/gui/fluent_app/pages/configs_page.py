@@ -2,7 +2,7 @@
 """參數管理頁面 - 左側列表，右側按鈕"""
 
 import os
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QWidget,
@@ -336,14 +336,28 @@ class ConfigsPage(BasePage):
                 print(f"[ConfigPage] Load error: {e}")
                 self._showInfo(t("config_error"), t("config_load_failed"), False)
                 return
+            # Deferred refresh: use QTimer to avoid crashing during signal processing.
+            # _refreshAllPages triggers setConfig on every page which can conflict
+            # with active Qt signal/slot processing.
             try:
-                window = self.window()
-                if hasattr(window, "_refreshAllPages"):
-                    window._refreshAllPages()
-                elif hasattr(window, "setConfig") and window._config:
-                    window.setConfig(window._config)
+                QTimer.singleShot(50, self._safeRefreshAllPages)
             except Exception as e:
-                print(f"[ConfigPage] Refresh error after load: {e}")
+                print(f"[ConfigPage] Refresh schedule error: {e}")
+
+    def _safeRefreshAllPages(self):
+        """Safely refresh all pages after config load (called via QTimer)."""
+        try:
+            window = self.window()
+            if hasattr(window, "_refreshAllPages"):
+                window._refreshAllPages()
+            elif (
+                hasattr(window, "setConfig")
+                and hasattr(window, "_config")
+                and window._config
+            ):
+                window.setConfig(window._config)
+        except Exception as e:
+            print(f"[ConfigPage] Deferred refresh error: {e}")
 
     def _onSaveConfig(self):
         name = self._getSelectedConfig()

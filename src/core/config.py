@@ -91,19 +91,27 @@ class Config:
         self.bezier_curve_steps: int = 4  # More segments = smoother (>=2)
 
         # Smart tracking prediction settings (replaces Kalman)
-        self.tracker_enabled: bool = False  # Enable smart tracking prediction
-        self.tracker_prediction_time: float = 0.025  # Prediction time (seconds)
-        self.tracker_smoothing_factor: float = 0.66  # Velocity smoothing factor (0~1)
+        self.tracker_enabled: bool = True  # Enable smart tracking prediction
+        self.tracker_prediction_time: float = 0.035  # Prediction time (seconds)
+        self.tracker_smoothing_factor: float = 0.60  # Velocity smoothing factor (0~1)
         self.tracker_stop_threshold: float = (
-            10.0  # Low speed zeroing threshold (pixels/sec)
+            12.0  # Low speed zeroing threshold (pixels/sec)
         )
         self.tracker_show_prediction: bool = True  # Show prediction visualization
 
         self.use_letterbox_preprocess: bool = (
-            False  # Letterbox resize preserving aspect ratio
+            True  # Letterbox resize preserving aspect ratio (better detection)
         )
         self.multi_scale_inference: bool = (
             True  # Multi-scale sub-region inference for distant targets
+        )
+
+        # Temporal filter settings (stabilizes detection over time)
+        self.temporal_confirm_frames: int = (
+            2  # Frames to confirm a target before tracking (reduces false positives)
+        )
+        self.temporal_expire_time: float = (
+            0.4  # Seconds before an unconfirmed target expires
         )
 
         # Tracker prediction data (updated by ai_loop, read by overlay)
@@ -120,17 +128,17 @@ class Config:
         self.first_run_complete: bool = False
 
         # 頭部和身體區域占比設定
-        self.head_width_ratio: float = 0.38  # 頭部寬度占檢測框寬度的比例
-        self.head_height_ratio: float = 0.26  # 頭部高度占檢測框高度的比例
+        self.head_width_ratio: float = 0.42  # 頭部寬度占檢測框寬度的比例
+        self.head_height_ratio: float = 0.28  # 頭部高度占檢測框高度的比例
         self.body_width_ratio: float = 0.87  # 身體寬度占檢測框寬度的比例
 
         # PID 控制器參數 (分離 X 和 Y 軸)
-        self.pid_kp_x: float = 0.26  # 水平 P: 比例 - 主要影響反應速度
-        self.pid_ki_x: float = 0.0  # 水平 I: 積分 - 修正靜態誤差
-        self.pid_kd_x: float = 0.0  # 水平 D: 微分 - 抑制抖動與過衝
-        self.pid_kp_y: float = 0.26  # 垂直 P: 比例
-        self.pid_ki_y: float = 0.0  # 垂直 I: 積分
-        self.pid_kd_y: float = 0.0  # 垂直 D: 微分
+        self.pid_kp_x: float = 0.38  # 水平 P: 比例 - 主要影響反應速度
+        self.pid_ki_x: float = 0.005  # 水平 I: 積分 - 修正靜態誤差
+        self.pid_kd_x: float = 0.08  # 水平 D: 微分 - 抑制抖動與過衝
+        self.pid_kp_y: float = 0.40  # 垂直 P: 比例
+        self.pid_ki_y: float = 0.005  # 垂直 I: 積分
+        self.pid_kd_y: float = 0.08  # 垂直 D: 微分
 
         # Y軸壓槍速度逐漸歸零
         self.aim_y_reduce_enabled: bool = False  # 是否啟用 Y 軸歸零功能
@@ -154,8 +162,8 @@ class Config:
         # - detect_interval: 進入瞄準/需要即時反應時的間隔
         # - screenshot_interval: 螢幕截圖間隔（獨立於偵測間隔）
         # - idle_detect_interval: 未瞄準但 keep_detecting=True 時的間隔（降低占用）
-        self.detect_interval: float = 0.02  # 秒，預設 20ms
-        self.screenshot_interval: float = 0.01  # 秒，預設 10ms
+        self.detect_interval: float = 0.008  # 秒，預設 8ms
+        self.screenshot_interval: float = 0.005  # 秒，預設 5ms
         self.idle_detect_interval: float = 0.05  # 秒，預設 50ms
         self.idle_detect_enabled: bool = True  # 是否啟用未瞄準時降低偵測頻率
         self.aim_toggle_key: int = 45  # Insert 鍵
@@ -290,6 +298,8 @@ class Config:
             "tracker_show_prediction": self.tracker_show_prediction,
             "use_letterbox_preprocess": self.use_letterbox_preprocess,
             "multi_scale_inference": self.multi_scale_inference,
+            "temporal_confirm_frames": self.temporal_confirm_frames,
+            "temporal_expire_time": self.temporal_expire_time,
             "dark_mode": self.dark_mode,
             "enable_acrylic": self.enable_acrylic,
             "acrylic_window_alpha": self.acrylic_window_alpha,
