@@ -118,11 +118,36 @@ def _box_iou(a: List[float], b: List[float]) -> float:
 def _smooth_box(
     prev: List[float], curr: List[float], alpha: float = 0.4
 ) -> List[float]:
+    """Smooth box while preserving size/aspect ratio changes.
+
+    Instead of smoothing all 4 corners independently (which causes drift),
+    smooth the center position and use the current box's size.
+    """
+    prev_cx = (prev[0] + prev[2]) * 0.5
+    prev_cy = (prev[1] + prev[3]) * 0.5
+    curr_cx = (curr[0] + curr[2]) * 0.5
+    curr_cy = (curr[1] + curr[3]) * 0.5
+
+    # Smooth center position only
+    smooth_cx = prev_cx * alpha + curr_cx * (1 - alpha)
+    smooth_cy = prev_cy * alpha + curr_cy * (1 - alpha)
+
+    # Use current box dimensions (responsive to size changes)
+    curr_w = curr[2] - curr[0]
+    curr_h = curr[3] - curr[1]
+
+    # Smooth size slightly too, but much less than position
+    size_alpha = alpha * 0.5  # Less smoothing on size = faster response
+    prev_w = prev[2] - prev[0]
+    prev_h = prev[3] - prev[1]
+    smooth_w = prev_w * size_alpha + curr_w * (1 - size_alpha)
+    smooth_h = prev_h * size_alpha + curr_h * (1 - size_alpha)
+
     return [
-        prev[0] * alpha + curr[0] * (1 - alpha),
-        prev[1] * alpha + curr[1] * (1 - alpha),
-        prev[2] * alpha + curr[2] * (1 - alpha),
-        prev[3] * alpha + curr[3] * (1 - alpha),
+        smooth_cx - smooth_w * 0.5,
+        smooth_cy - smooth_h * 0.5,
+        smooth_cx + smooth_w * 0.5,
+        smooth_cy + smooth_h * 0.5,
     ]
 
 
@@ -192,8 +217,8 @@ def apply_temporal_filter(
         iou_check = _box_iou(state.smoothed_box, best_box)
         if iou_check > 0.15:
             box_area = (best_box[2] - best_box[0]) * (best_box[3] - best_box[1])
-            # Higher alpha = smoother tracking, less jitter
-            alpha = 0.70 if box_area < 800 else 0.60
+            # Lower alpha = faster tracking, less lag behind moving targets
+            alpha = 0.50 if box_area < 800 else 0.40
             best_box = _smooth_box(state.smoothed_box, best_box, alpha=alpha)
         # If IoU is low, don't smooth — accept the raw position directly
 

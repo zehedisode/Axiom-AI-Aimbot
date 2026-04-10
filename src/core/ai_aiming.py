@@ -24,7 +24,15 @@ def calculate_aim_target(
     if aim_part == "head":
         target_x = box_center_x
         head_pixel_h = box_h * head_height_ratio
-        target_y = abs_y1 + head_pixel_h * 0.35
+        # Adaptive offset: for small/distant targets, aim at head center (0.45)
+        # For large/close targets, aim slightly higher for forehead (0.40)
+        if box_h < 60:
+            head_offset = 0.45  # Small box = distant, aim center of head region
+        elif box_h < 120:
+            head_offset = 0.42  # Medium box
+        else:
+            head_offset = 0.38  # Large box = close, aim upper head
+        target_y = abs_y1 + head_pixel_h * head_offset
     elif aim_part == "body":
         target_x = box_center_x
         head_pixel_h = box_h * head_height_ratio
@@ -33,7 +41,7 @@ def calculate_aim_target(
     else:
         target_x = box_center_x
         head_pixel_h = box_h * head_height_ratio
-        head_center_y = abs_y1 + head_pixel_h * 0.35
+        head_center_y = abs_y1 + head_pixel_h * 0.45
         body_center_y = (abs_y1 + head_pixel_h + abs_y2) * 0.5
         target_y = head_center_y * 0.6 + body_center_y * 0.4
 
@@ -48,7 +56,14 @@ def _calculate_head_center(
     box_h = abs_y2 - abs_y1
     cx = abs_x1 + box_w * 0.5
     head_pixel_h = box_h * head_height_ratio
-    cy = abs_y1 + head_pixel_h * 0.35
+    # Match the adaptive offset from calculate_aim_target
+    if box_h < 60:
+        head_offset = 0.45
+    elif box_h < 120:
+        head_offset = 0.42
+    else:
+        head_offset = 0.38
+    cy = abs_y1 + head_pixel_h * head_offset
     return cx, cy
 
 
@@ -169,11 +184,11 @@ def process_aiming(
 
     error_distance = math.sqrt(errorX * errorX + errorY * errorY)
 
+    # Bezier: only when NOT near-locked and far from target
     if getattr(config, "bezier_curve_enabled", False):
-        if error_distance > 3.0:
+        if error_distance > 6.0:
             if not state.target_locked:
                 state.target_locked = False
-                # Only randomize ONCE when losing lock, not every frame
                 if (
                     not hasattr(state, "_bezier_needs_new_scalar")
                     or state._bezier_needs_new_scalar
@@ -182,7 +197,7 @@ def process_aiming(
                     state._bezier_needs_new_scalar = False
 
             strength = float(getattr(config, "bezier_curve_strength", 0.08))
-            fade = min(1.0, error_distance / 120.0)
+            fade = min(1.0, error_distance / 150.0)
             effective_strength = strength * fade
 
             perp_x = -errorY
@@ -191,10 +206,11 @@ def process_aiming(
             errorX += perp_x * effective_strength * state.bezier_curve_scalar
             errorY += perp_y * effective_strength * state.bezier_curve_scalar
         else:
+            # Within 6px: disable bezier, aim directly at target
             state.target_locked = True
             state._bezier_needs_new_scalar = True
     else:
-        state.target_locked = error_distance <= 3.0
+        state.target_locked = error_distance <= 2.0
 
     pid_x.set_distance_context(error_distance)
     pid_y.set_distance_context(error_distance)
@@ -208,22 +224,7 @@ def process_aiming(
             fade_out = max(0.0, 1.0 - (aim_duration - delay) / 0.3)
             dy *= fade_out
 
-    # Suppress micro-movements when locked on target to prevent jitter
-    # If PID output is < 1 pixel, don't move at all (avoids 0↔1 oscillation)
     move_x, move_y = int(round(dx)), int(round(dy))
-
-    # Additional jitter suppression: if locked and movement is tiny, skip it
-    if state.target_locked and abs(move_x) <= 1 and abs(move_y) <= 1:
-        total_move = abs(move_x) + abs(move_y)
-        if total_move == 0:
-            pass  # No movement needed, don't send
-        elif total_move == 1:
-            # Single pixel micro-move: only send every other frame to smooth out
-            if not hasattr(state, "_micro_move_counter"):
-                state._micro_move_counter = 0
-            state._micro_move_counter += 1
-            if state._micro_move_counter % 2 != 0:
-                move_x, move_y = 0, 0
 
     if move_x != 0 or move_y != 0:
         send_mouse_move(move_x, move_y, method=mouse_method)

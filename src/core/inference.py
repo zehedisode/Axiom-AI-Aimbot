@@ -29,24 +29,22 @@ class PIDController:
     def update(self, error: float) -> float:
         dist = self._error_distance
 
-        # Dead zone: suppress sub-pixel noise (prevents micro-jitter)
-        if dist < 1.0:
-            self.integral *= 0.5
+        # Dead zone: truly sub-pixel only (< 0.5px)
+        if dist < 0.5:
             self.previous_error = error
             return 0.0
 
-        # Near-target precision mode: smoothly reduce gains to prevent jitter
-        # while still allowing fine adjustments
-        if dist < 10.0:
-            # Smooth quadratic fade — gentler as we get closer
-            t = (dist - 1.0) / 9.0  # 0.0 at 1px, 1.0 at 10px
-            scale = 0.25 + 0.75 * (t * t)  # quadratic ease-in
+        # Near-target precision mode with LINEAR fade (not quadratic)
+        # This ensures enough force to reach the target even at 3-5px distance
+        if dist < 15.0:
+            t = min(1.0, (dist - 0.5) / 14.5)  # 0.0 at 0.5px, 1.0 at 15px
+            # Minimum 40% power even at closest range — enough to reach target
+            scale = 0.40 + 0.60 * t
             effective_kp = self.Kp * scale
-            effective_kd = self.Kd * (0.6 + 0.4 * t)
+            effective_kd = self.Kd * (0.7 + 0.3 * t)
             derivative = error - self.previous_error
-            # Don't aggressively decay integral near target — causes drift
-            self.integral = self.integral * 0.95 + error * 0.05
-            self.integral = max(-200.0, min(200.0, self.integral))
+            self.integral = self.integral * 0.9 + error * 0.1
+            self.integral = max(-100.0, min(100.0, self.integral))
             output = (
                 effective_kp * error
                 + self.Ki * self.integral

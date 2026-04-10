@@ -136,12 +136,12 @@ class Config:
         self.body_width_ratio: float = 0.87  # 身體寬度占檢測框寬度的比例
 
         # PID 控制器參數 (分離 X 和 Y 軸)
-        self.pid_kp_x: float = 0.38  # 水平 P: 比例 - 主要影響反應速度
+        self.pid_kp_x: float = 0.45  # 水平 P: 比例 - 主要影響反應速度
         self.pid_ki_x: float = 0.005  # 水平 I: 積分 - 修正靜態誤差
-        self.pid_kd_x: float = 0.08  # 水平 D: 微分 - 抑制抖動與過衝
-        self.pid_kp_y: float = 0.40  # 垂直 P: 比例
+        self.pid_kd_x: float = 0.07  # 水平 D: 微分 - 抑制抖動與過衝
+        self.pid_kp_y: float = 0.48  # 垂直 P: 比例
         self.pid_ki_y: float = 0.005  # 垂直 I: 積分
-        self.pid_kd_y: float = 0.08  # 垂直 D: 微分
+        self.pid_kd_y: float = 0.07  # 垂直 D: 微分
 
         # Y軸壓槍速度逐漸歸零
         self.aim_y_reduce_enabled: bool = False  # 是否啟用 Y 軸歸零功能

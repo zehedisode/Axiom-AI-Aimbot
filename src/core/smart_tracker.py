@@ -62,7 +62,9 @@ class SmartTracker:
 
         speed = np.sqrt(self.vx**2 + self.vy**2)
 
-        if speed < self.stop_threshold * 2:
+        # For slow/stationary targets, return raw position (no prediction offset)
+        # Higher threshold (3x) prevents aiming offset on nearly-still targets
+        if speed < self.stop_threshold * 3:
             return self.last_x, self.last_y
 
         pred_x = self.last_x + self.vx * prediction_time
