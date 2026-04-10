@@ -546,15 +546,12 @@ def ai_logic_loop(
                 # Initialize crop coordinates for non-zoom modes
                 crop_x, crop_y, crop_w, crop_h = 0, 0, 0, 0
 
-                if detection_zoom > 1.05:
-                    # Zoom mode: crop center and upscale for distant target detection
-                    input_tensor, crop_x, crop_y, crop_w, crop_h = (
-                        preprocess_image_zoom(
-                            latest_frame, config.model_input_size, detection_zoom
-                        )
-                    )
-                    lb_scale, lb_padding = 0.0, None
-                elif use_letterbox:
+                # ── DUAL-PASS DETECTION ──
+                # Pass 1: Full frame (near + mid targets)
+                # Pass 2: Center zoom crop (distant targets) — only if zoom > 1.0
+                detection_zoom = float(getattr(config, "detection_zoom", 1.0))
+
+                if use_letterbox:
                     input_tensor, lb_scale, lb_padding = preprocess_image_letterbox(
                         latest_frame, config.model_input_size
                     )
@@ -568,36 +565,52 @@ def ai_logic_loop(
 
                 try:
                     t2 = time.perf_counter()
+
+                    # === PASS 1: Full frame detection ===
                     outputs = model.run(
                         None, {input_name: input_tensor}, run_options=run_options
                     )
                     t3 = time.perf_counter()
 
-                    # Postprocess with correct coordinate mapping for zoom
+                    boxes, confidences = postprocess_outputs(
+                        outputs,
+                        latest_region["width"],
+                        latest_region["height"],
+                        config.model_input_size,
+                        config.min_confidence,
+                        latest_region["left"],
+                        latest_region["top"],
+                        letterbox_scale=lb_scale,
+                        letterbox_padding=lb_padding,
+                    )
+
+                    # === PASS 2: Zoom detection for distant targets ===
                     if detection_zoom > 1.05:
-                        # Map zoom crop coordinates back to original image
-                        boxes, confidences = postprocess_outputs(
-                            outputs,
-                            crop_w,
-                            crop_h,
-                            config.model_input_size,
-                            config.min_confidence,
-                            offset_x=latest_region["left"] + crop_x,
-                            offset_y=latest_region["top"] + crop_y,
+                        zoom_tensor, zoom_cx, zoom_cy, zoom_cw, zoom_ch = (
+                            preprocess_image_zoom(
+                                latest_frame, config.model_input_size, detection_zoom
+                            )
                         )
-                    else:
-                        boxes, confidences = postprocess_outputs(
-                            outputs,
-                            latest_region["width"],
-                            latest_region["height"],
+                        zoom_outputs = model.run(
+                            None, {input_name: zoom_tensor}, run_options=run_options
+                        )
+                        zoom_boxes, zoom_confs = postprocess_outputs(
+                            zoom_outputs,
+                            zoom_cw,
+                            zoom_ch,
                             config.model_input_size,
-                            config.min_confidence,
-                            latest_region["left"],
-                            latest_region["top"],
-                            letterbox_scale=lb_scale,
-                            letterbox_padding=lb_padding,
+                            config.min_confidence
+                            * 0.85,  # Slightly lower threshold for zoom
+                            offset_x=latest_region["left"] + zoom_cx,
+                            offset_y=latest_region["top"] + zoom_cy,
                         )
 
+                        # Merge zoom results with full-frame results
+                        if zoom_boxes:
+                            boxes.extend(zoom_boxes)
+                            confidences.extend(zoom_confs)
+
+                    # NMS on combined results
                     use_multi_scale = getattr(config, "multi_scale_inference", True)
                     region_min_dim = min(
                         latest_region["width"], latest_region["height"]
