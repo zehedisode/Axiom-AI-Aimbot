@@ -195,6 +195,80 @@ def preprocess_image(
     return np.ascontiguousarray(blob, dtype=np.float32)
 
 
+def preprocess_image_zoom(
+    image: npt.NDArray[np.uint8], model_input_size: int, zoom_factor: float = 2.0
+) -> Tuple[npt.NDArray[np.float32], float, float, int, int]:
+    """Preprocess with center crop zoom for better distant target detection.
+
+    Crops the center portion of the image (1/zoom_factor of each dimension),
+    then upscales to model_input_size. This makes small/distant targets appear
+    larger in the model input, improving detection accuracy.
+
+    Args:
+        image: Input frame.
+        model_input_size: Model input dimension (e.g., 640).
+        zoom_factor: Zoom level (1.0 = no zoom, 2.0 = 2x center crop, etc.)
+
+    Returns:
+        blob: Preprocessed input tensor (1, 3, H, W).
+        scale_x: X scale factor from crop coordinates to original coordinates.
+        scale_y: Y scale factor from crop coordinates to original coordinates.
+        crop_x: X offset of the crop in original image.
+        crop_y: Y offset of the crop in original image.
+    """
+    if image.ndim == 3 and image.shape[2] == 4:
+        image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+
+    h, w = image.shape[:2]
+    zoom_factor = max(1.0, min(zoom_factor, 4.0))
+
+    # Calculate crop region (center of image)
+    crop_w = int(w / zoom_factor)
+    crop_h = int(h / zoom_factor)
+    crop_x = (w - crop_w) // 2
+    crop_y = (h - crop_h) // 2
+
+    # Clamp crop to image bounds
+    crop_x = max(0, crop_x)
+    crop_y = max(0, crop_y)
+    crop_w = min(crop_w, w - crop_x)
+    crop_h = min(crop_h, h - crop_y)
+
+    # Crop
+    cropped = image[crop_y : crop_y + crop_h, crop_x : crop_x + crop_w]
+
+    # Enhance small/distant targets
+    is_small_frame = crop_h < model_input_size or crop_w < model_input_size
+    if is_small_frame:
+        cropped = _apply_clahe(cropped, clip_limit=2.5, tile_grid=4)
+        cropped = _gamma_correct(cropped, gamma=0.9)
+
+    # Resize to model input
+    if is_small_frame:
+        cropped = cv2.resize(
+            cropped,
+            (model_input_size, model_input_size),
+            interpolation=cv2.INTER_LINEAR,
+        )
+        cropped = _apply_sharpen(cropped)
+    else:
+        cropped = cv2.resize(
+            cropped,
+            (model_input_size, model_input_size),
+            interpolation=cv2.INTER_AREA,
+        )
+
+    blob = cv2.dnn.blobFromImage(
+        cropped,
+        scalefactor=1.0 / 255.0,
+        size=(model_input_size, model_input_size),
+        swapRB=True,
+        crop=False,
+    )
+
+    return np.ascontiguousarray(blob, dtype=np.float32), crop_x, crop_y, crop_w, crop_h
+
+
 def preprocess_image_letterbox(
     image: npt.NDArray[np.uint8], model_input_size: int
 ) -> Tuple[npt.NDArray[np.float32], float, Tuple[int, int, int, int]]:

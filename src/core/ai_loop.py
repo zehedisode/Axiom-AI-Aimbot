@@ -32,6 +32,7 @@ from .inference import (
     postprocess_outputs,
     preprocess_image,
     preprocess_image_letterbox,
+    preprocess_image_zoom,
 )
 from .screen_capture import (
     _cleanup_capture,
@@ -540,7 +541,20 @@ def ai_logic_loop(
 
                 t0 = time.perf_counter()
                 use_letterbox = getattr(config, "use_letterbox_preprocess", False)
-                if use_letterbox:
+                detection_zoom = float(getattr(config, "detection_zoom", 1.0))
+
+                # Initialize crop coordinates for non-zoom modes
+                crop_x, crop_y, crop_w, crop_h = 0, 0, 0, 0
+
+                if detection_zoom > 1.05:
+                    # Zoom mode: crop center and upscale for distant target detection
+                    input_tensor, crop_x, crop_y, crop_w, crop_h = (
+                        preprocess_image_zoom(
+                            latest_frame, config.model_input_size, detection_zoom
+                        )
+                    )
+                    lb_scale, lb_padding = 0.0, None
+                elif use_letterbox:
                     input_tensor, lb_scale, lb_padding = preprocess_image_letterbox(
                         latest_frame, config.model_input_size
                     )
@@ -558,17 +572,31 @@ def ai_logic_loop(
                         None, {input_name: input_tensor}, run_options=run_options
                     )
                     t3 = time.perf_counter()
-                    boxes, confidences = postprocess_outputs(
-                        outputs,
-                        latest_region["width"],
-                        latest_region["height"],
-                        config.model_input_size,
-                        config.min_confidence,
-                        latest_region["left"],
-                        latest_region["top"],
-                        letterbox_scale=lb_scale,
-                        letterbox_padding=lb_padding,
-                    )
+
+                    # Postprocess with correct coordinate mapping for zoom
+                    if detection_zoom > 1.05:
+                        # Map zoom crop coordinates back to original image
+                        boxes, confidences = postprocess_outputs(
+                            outputs,
+                            crop_w,
+                            crop_h,
+                            config.model_input_size,
+                            config.min_confidence,
+                            offset_x=latest_region["left"] + crop_x,
+                            offset_y=latest_region["top"] + crop_y,
+                        )
+                    else:
+                        boxes, confidences = postprocess_outputs(
+                            outputs,
+                            latest_region["width"],
+                            latest_region["height"],
+                            config.model_input_size,
+                            config.min_confidence,
+                            latest_region["left"],
+                            latest_region["top"],
+                            letterbox_scale=lb_scale,
+                            letterbox_padding=lb_padding,
+                        )
 
                     use_multi_scale = getattr(config, "multi_scale_inference", True)
                     region_min_dim = min(

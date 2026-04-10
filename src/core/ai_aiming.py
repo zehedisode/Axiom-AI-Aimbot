@@ -208,7 +208,22 @@ def process_aiming(
             fade_out = max(0.0, 1.0 - (aim_duration - delay) / 0.3)
             dy *= fade_out
 
+    # Suppress micro-movements when locked on target to prevent jitter
+    # If PID output is < 1 pixel, don't move at all (avoids 0↔1 oscillation)
     move_x, move_y = int(round(dx)), int(round(dy))
+
+    # Additional jitter suppression: if locked and movement is tiny, skip it
+    if state.target_locked and abs(move_x) <= 1 and abs(move_y) <= 1:
+        total_move = abs(move_x) + abs(move_y)
+        if total_move == 0:
+            pass  # No movement needed, don't send
+        elif total_move == 1:
+            # Single pixel micro-move: only send every other frame to smooth out
+            if not hasattr(state, "_micro_move_counter"):
+                state._micro_move_counter = 0
+            state._micro_move_counter += 1
+            if state._micro_move_counter % 2 != 0:
+                move_x, move_y = 0, 0
 
     if move_x != 0 or move_y != 0:
         send_mouse_move(move_x, move_y, method=mouse_method)

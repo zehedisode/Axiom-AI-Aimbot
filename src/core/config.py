@@ -105,6 +105,9 @@ class Config:
         self.multi_scale_inference: bool = (
             True  # Multi-scale sub-region inference for distant targets
         )
+        self.detection_zoom: float = (
+            1.0  # Center crop zoom factor (1.0=off, 2.0=2x zoom for distant targets)
+        )
 
         # Temporal filter settings (stabilizes detection over time)
         self.temporal_confirm_frames: int = (
@@ -298,6 +301,7 @@ class Config:
             "tracker_show_prediction": self.tracker_show_prediction,
             "use_letterbox_preprocess": self.use_letterbox_preprocess,
             "multi_scale_inference": self.multi_scale_inference,
+            "detection_zoom": self.detection_zoom,
             "temporal_confirm_frames": self.temporal_confirm_frames,
             "temporal_expire_time": self.temporal_expire_time,
             "dark_mode": self.dark_mode,

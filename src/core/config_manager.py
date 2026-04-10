@@ -209,8 +209,10 @@ class ConfigManager:
                 config_instance, "temporal_confirm_frames", 2
             ),
             "temporal_expire_time": getattr(
-                config_instance, "temporal_expire_time", 0.4
+                config_instance, "temporal_expire_time", 0.15
             ),
+            # Detection zoom
+            "detection_zoom": getattr(config_instance, "detection_zoom", 1.0),
         }
 
     def load_config(self, config_instance: Config, config_name: str) -> bool:
